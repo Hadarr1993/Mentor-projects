@@ -14,6 +14,14 @@ import { DEFAULT_SIDES } from '../data/sides.js';
 export const STORAGE_KEY = 'midburn-kitchen';
 export const CORRUPT_KEY = 'midburn-kitchen__corrupt';
 
+/**
+ * Who is holding this device. Deliberately a separate key, never part of the
+ * synced document: `settings` merges as one object with last-writer-wins, so a
+ * name stored there would be overwritten across devices — every phone would
+ * end up believing it belonged to whoever saved last.
+ */
+export const DEVICE_KEY = 'midburn-kitchen__device';
+
 /** Bump when the shape changes, and add a matching entry to MIGRATIONS. */
 export const SCHEMA_VERSION = 2;
 
@@ -61,6 +69,9 @@ export function makeDefaults() {
     // deepMergeDefaults fills a missing key from defaults, which is exactly
     // what that mechanism exists for.
     extras: { items: [], _ts: ts },
+    // Keyed by id and merged per task, because two people closing different
+    // tasks at the same time is the normal case, not the edge case.
+    tasks: {},
   };
 }
 

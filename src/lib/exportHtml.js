@@ -1,4 +1,4 @@
-import { formatQty, dayList, mealIngredients, mealPeople, shoppingList, groupByCategory, mealId } from './calc.js';
+import { formatQty, dayList, mealIngredients, mealPeople, shoppingList, groupByCategory, mealId, sortedTasks } from './calc.js';
 import { CATEGORIES, MEAL_KEYS, MEAL_LABELS } from '../data/constants.js';
 import { iconSvg } from './exportIcons.js';
 
@@ -133,6 +133,7 @@ export function buildFullDocument(state) {
         .filter(Boolean),
     ),
     shoppingSection(groups, state, rows),
+    tasksSection(state),
   ].join('\n');
 
   return shell({ title: 'המטבח של קאמפ פרדייז', docId: 'full', body });
@@ -234,6 +235,28 @@ function shoppingSection(groups, state, rows) {
           <span>${esc(r.n)} — <b>${esc(formatQty(r.q, r.u))}</b></span>
         </label>`).join('')}
     `).join('')}
+  </div>`;
+}
+
+function tasksSection(state) {
+  const tasks = sortedTasks(state.tasks);
+  if (!tasks.length) return '';
+  const done = tasks.filter((t) => t.done).length;
+
+  return `<h2 style="margin:26px 0 12px">משימות צוות</h2>
+  <div class="card">
+    <div class="spread" style="margin-bottom:12px">
+      <span class="tag">${iconSvg('list', 13)} ${done}/${tasks.length} נסגרו</span>
+    </div>
+    ${tasks.map((t) => `
+      <label class="chk${t.done ? ' done' : ''}">
+        <input type="checkbox" data-k="task-${esc(t.id)}"${t.done ? ' checked' : ''}>
+        <span>${esc(t.text)}${
+          t.owner ? ` <span class="tiny">· ${esc(t.owner)}</span>` : ''
+        }${
+          t.done && t.doneBy ? ` <span class="tiny">· נסגר על ידי ${esc(t.doneBy)}</span>` : ''
+        }</span>
+      </label>`).join('')}
   </div>`;
 }
 

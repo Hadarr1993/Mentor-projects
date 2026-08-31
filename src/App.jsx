@@ -3,12 +3,14 @@ import { Icon } from './components/Icon.jsx';
 import { SunsetHeader } from './components/SunsetHeader.jsx';
 import { ToastHost, ErrorBox, toast } from './components/ui.jsx';
 import { useKitchen } from './state/useKitchen.js';
+import { useDevice } from './state/useDevice.js';
 import { dayList } from './lib/calc.js';
 import { downloadFile } from './lib/exportHtml.js';
 
 import Today from './tabs/Today.jsx';
 import Week from './tabs/Week.jsx';
 import Recipes from './tabs/Recipes.jsx';
+import Tasks from './tabs/Tasks.jsx';
 import Shopping from './tabs/Shopping.jsx';
 import Ice from './tabs/Ice.jsx';
 import Export from './tabs/Export.jsx';
@@ -18,6 +20,7 @@ const TABS = [
   { id: 'today',    label: 'היום',     icon: 'today',    Component: Today },
   { id: 'week',     label: 'שבוע',     icon: 'week',     Component: Week },
   { id: 'recipes',  label: 'מתכונים',  icon: 'recipes',  Component: Recipes },
+  { id: 'tasks',    label: 'משימות',   icon: 'checklist', Component: Tasks },
   { id: 'shopping', label: 'קניות',    icon: 'shopping', Component: Shopping },
   { id: 'ice',      label: 'קרח',      icon: 'ice',      Component: Ice },
   { id: 'export',   label: 'ייצוא',    icon: 'export',   Component: Export },
@@ -26,6 +29,7 @@ const TABS = [
 
 export default function App() {
   const kitchen = useKitchen();
+  const device = useDevice();
   const [tab, setTab] = useState('today');
 
   const {
@@ -134,6 +138,8 @@ export default function App() {
           syncStatus={syncStatus}
           onRefreshCloud={refreshFromCloud}
           onGoToWeek={() => setTab('week')}
+          me={device.me}
+          chooseMe={device.chooseMe}
         />
       </main>
 

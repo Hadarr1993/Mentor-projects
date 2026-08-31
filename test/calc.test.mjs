@@ -223,3 +223,46 @@ test('an extra with an invalid scale is dropped on load, not kept broken', async
   assert.equal(out.extras.items.length, 1);
   assert.equal(out.extras.items[0].n, 'תקין');
 });
+
+/* ── task ordering ─────────────────────────────────────────────────── */
+
+test('open tasks sit above closed ones, newest close at the very bottom', async () => {
+  const { sortedTasks } = await import('../src/lib/calc.js');
+  const order = sortedTasks({
+    a: { id: 'a', text: 'ראשונה', createdAt: 100, done: false },
+    b: { id: 'b', text: 'נסגרה מזמן', createdAt: 200, done: true, doneAt: 500 },
+    c: { id: 'c', text: 'שנייה', createdAt: 300, done: false },
+    d: { id: 'd', text: 'נסגרה עכשיו', createdAt: 50, done: true, doneAt: 900 },
+  }).map((t) => t.text);
+
+  assert.deepEqual(order, ['ראשונה', 'שנייה', 'נסגרה מזמן', 'נסגרה עכשיו']);
+});
+
+test('deleted tasks are excluded from the list and the count', async () => {
+  const { sortedTasks, taskProgress } = await import('../src/lib/calc.js');
+  const tasks = {
+    a: { id: 'a', text: 'חיה', createdAt: 1, done: false },
+    z: { id: 'z', _deleted: true, _ts: 2 },
+  };
+  assert.equal(sortedTasks(tasks).length, 1);
+  assert.equal(taskProgress(tasks).count, 1);
+});
+
+test('task progress counts what is closed', async () => {
+  const { taskProgress } = await import('../src/lib/calc.js');
+  const p = taskProgress({
+    a: { id: 'a', done: true, doneAt: 1 },
+    b: { id: 'b', done: false },
+    c: { id: 'c', done: false },
+  });
+  assert.equal(p.done, 1);
+  assert.equal(p.open, 2);
+  assert.equal(p.count, 3);
+  assert.ok(Math.abs(p.ratio - 1 / 3) < 1e-9);
+});
+
+test('an empty or missing task bag is handled', async () => {
+  const { sortedTasks, taskProgress } = await import('../src/lib/calc.js');
+  assert.deepEqual(sortedTasks(undefined), []);
+  assert.equal(taskProgress(undefined).ratio, 0);
+});

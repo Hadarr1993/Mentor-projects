@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /**
  * Springs, hand-rolled on requestAnimationFrame.
@@ -246,4 +246,62 @@ export function useDragScroll(ref) {
   /** True when the pointer moved enough to be a drag — used to swallow the
    *  click that would otherwise fire at the end of a swipe. */
   return () => state.current.moved;
+}
+
+/**
+ * FLIP reordering for a list.
+ *
+ * When a row changes position — a task ticked off dropping to the bottom —
+ * the browser repaints it in its new slot instantly. That reads as a glitch:
+ * the row you were looking at is suddenly somewhere else. FLIP measures where
+ * each row was, lets the DOM settle, then springs the difference away, so the
+ * eye can follow the row to its new home.
+ *
+ * Rows opt in with `data-flip-key`. Positions are measured with `offsetTop`
+ * rather than getBoundingClientRect, so a page scroll between renders cannot
+ * be mistaken for movement.
+ */
+export function useFlipList(ref, deps) {
+  const previous = useRef(new Map());
+
+  useLayoutEffect(() => {
+    const container = ref.current;
+    if (!container) return;
+
+    const nodes = [...container.querySelectorAll('[data-flip-key]')];
+    const next = new Map();
+    const springs = [];
+
+    for (const node of nodes) {
+      const key = node.dataset.flipKey;
+      const top = node.offsetTop;
+      next.set(key, top);
+
+      const before = previous.current.get(key);
+      // A row that was not on screen last time has nowhere to travel from.
+      if (before === undefined) continue;
+
+      const delta = before - top;
+      if (Math.abs(delta) < 1) continue;
+
+      node.style.willChange = 'transform';
+      const spring = createSpring(delta, SPRING.move, (v, settled) => {
+        node.style.transform = settled ? '' : `translate3d(0, ${v}px, 0)`;
+        if (settled) node.style.willChange = '';
+      });
+      spring.set(0);
+      springs.push(spring);
+    }
+
+    previous.current = next;
+    // Abandoning mid-flight leaves a stray transform; clear it on teardown.
+    return () => {
+      for (const s of springs) s.stop();
+      for (const node of nodes) {
+        node.style.transform = '';
+        node.style.willChange = '';
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 }

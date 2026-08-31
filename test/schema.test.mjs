@@ -197,3 +197,50 @@ test('a price set by one person is not lost when the other ticks something', asy
   assert.equal(out.shopping.items['אורז|גרם'].bought, true);
   assert.equal(out.shopping.items['בצל|גרם'].price, 12);
 });
+
+/* ── tasks ─────────────────────────────────────────────────────────── */
+
+test('an existing document gains tasks without losing anything', async () => {
+  const before = {
+    schemaVersion: 2,
+    campCode: 'PRDS-KEEPTASKS',
+    settings: { people: 44, members: [{ id: 'a', name: 'שי' }] },
+    recipes: { r: { id: 'r', name: 'קיים', iconKey: 'pasta', steps: '', ings: [], _ts: 3 } },
+    shopping: { items: { 'אורז|גרם': { price: 11, _ts: 3 } }, _ts: 3 },
+  };
+  const after = hydrate(before);
+  assert.deepEqual(after.tasks, {}, 'tasks appears, empty');
+  assert.equal(after.settings.people, 44);
+  assert.equal(after.settings.members[0].name, 'שי');
+  assert.equal(after.recipes.r.name, 'קיים');
+  assert.equal(after.shopping.items['אורז|גרם'].price, 11);
+});
+
+test('THE POINT: two people closing different tasks both keep their work', async () => {
+  const mine = {
+    recipes: {}, sides: {}, meals: {},
+    tasks: {
+      clean: { id: 'clean', text: 'לנקות', done: true, doneBy: 'הדר', doneAt: 900, _ts: 900 },
+      water: { id: 'water', text: 'מים', done: false, _ts: 100 },
+    },
+  };
+  const theirs = {
+    recipes: {}, sides: {}, meals: {},
+    tasks: {
+      clean: { id: 'clean', text: 'לנקות', done: false, _ts: 100 },
+      water: { id: 'water', text: 'מים', done: true, doneBy: 'שי', doneAt: 950, _ts: 950 },
+      unload: { id: 'unload', text: 'לפרוק', done: false, _ts: 200 },
+    },
+  };
+  const out = mergeState(mine, theirs);
+
+  assert.equal(out.tasks.clean.doneBy, 'הדר', 'my close survives');
+  assert.equal(out.tasks.water.doneBy, 'שי', 'their close survives');
+  assert.ok(out.tasks.unload, 'a task only they added is kept');
+});
+
+test('a deleted task is not resurrected by a stale device', async () => {
+  const mine = { recipes: {}, sides: {}, meals: {}, tasks: { x: { id: 'x', _deleted: true, _ts: 500 } } };
+  const theirs = { recipes: {}, sides: {}, meals: {}, tasks: { x: { id: 'x', text: 'חזרתי', _ts: 100 } } };
+  assert.equal(mergeState(mine, theirs).tasks.x._deleted, true);
+});

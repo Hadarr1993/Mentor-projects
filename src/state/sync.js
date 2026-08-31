@@ -64,7 +64,7 @@ export function mergeState(mine, theirs) {
   if (!mine) return theirs;
 
   const out = { ...theirs, ...mine };
-  for (const key of ['recipes', 'sides', 'meals']) {
+  for (const key of ['recipes', 'sides', 'meals', 'tasks']) {
     out[key] = mergeBag(mine[key], theirs[key]);
   }
   for (const key of ['settings', 'breakfast', 'pantry', 'extras']) {
@@ -89,7 +89,7 @@ export function mergeState(mine, theirs) {
 const TOMBSTONE_TTL = 1000 * 60 * 60 * 24 * 60; // 60 days
 export function pruneTombstones(state) {
   const cutoff = now() - TOMBSTONE_TTL;
-  for (const key of ['recipes', 'sides', 'meals']) {
+  for (const key of ['recipes', 'sides', 'meals', 'tasks']) {
     const bag = state[key];
     if (!bag) continue;
     for (const [id, item] of Object.entries(bag)) {

@@ -7,7 +7,7 @@ import { makeDefaults, newCampCode, now } from '../state/schema.js';
 import { touch } from '../state/useKitchen.js';
 import * as sync from '../state/sync.js';
 
-export function Settings({ state, update, saveNow, setState, syncStatus, onRefreshCloud }) {
+export function Settings({ state, update, saveNow, setState, syncStatus, onRefreshCloud, me, chooseMe }) {
   const copy = useCopy();
   const [error, setError] = useState(null);
 
@@ -102,6 +102,9 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
 
       {/* ── Crew ───────────────────────────────────────────────── */}
       <MembersCard state={state} update={update} />
+
+      {/* ── Who is holding this device ─────────────────────────── */}
+      <WhoAmICard state={state} me={me} chooseMe={chooseMe} />
 
       {/* ── Sharing ────────────────────────────────────────────── */}
       <div className="card stack-2">
@@ -216,6 +219,61 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
         <ConfirmButton onConfirm={resetAll} className="btn btn-danger"
                        icon="reset">אפס הכל</ConfirmButton>
       </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ identity */
+
+/**
+ * Which crew member is holding this phone.
+ *
+ * Stored under its own local key, never synced. It cannot live in `settings`,
+ * which merges wholesale with last-writer-wins — every device would end up
+ * claiming the name of whoever saved most recently.
+ */
+function WhoAmICard({ state, me, chooseMe }) {
+  const members = (state.settings.members || []).filter((m) => m.name?.trim());
+
+  const pick = async (name) => {
+    const ok = await chooseMe(name);
+    if (!ok) { toast('לא ניתן היה לשמור את הבחירה', 'danger'); return; }
+    toast(name ? `שלום ${name}` : 'הוסר השם מהמכשיר');
+  };
+
+  return (
+    <div className="card stack-2">
+      <div className="section-title">
+        <Icon name="today" strokeWidth={1.9} />
+        <h2 className="grow">מי אני במכשיר הזה</h2>
+        {me && <span className="tag tag-ok">{me}</span>}
+      </div>
+
+      <p className="small muted">
+        נשמר במכשיר הזה בלבד ולא מסונכרן — לכל אחד בצוות תהיה בחירה משלו.
+        משמש כדי לרשום מי סגר משימה בלשונית המשימות.
+      </p>
+
+      {members.length === 0 ? (
+        <div className="tiny dim">הוסף קודם חברי מחנה למעלה.</div>
+      ) : (
+        <div className="row wrap" style={{ gap: '0.35rem' }}>
+          {members.map((m) => {
+            const name = m.name.trim();
+            return (
+              <button
+                key={m.id}
+                type="button"
+                className="chip"
+                aria-pressed={me === name}
+                onClick={() => pick(me === name ? '' : name)}
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

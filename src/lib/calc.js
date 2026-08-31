@@ -337,3 +337,30 @@ export function assignTornim(state, days) {
   }
   return out;
 }
+
+/* ----------------------------------------------------------------- tasks */
+
+/**
+ * Open tasks first in the order they were written, then closed ones in the
+ * order they were closed — so whatever was just ticked drops to the very
+ * bottom, and the list reads as "what is left" above "what got done".
+ */
+export function sortedTasks(tasks) {
+  const live = Object.values(tasks || {}).filter((t) => t && !t._deleted);
+  const open = live.filter((t) => !t.done)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const done = live.filter((t) => t.done)
+    .sort((a, b) => (a.doneAt || 0) - (b.doneAt || 0));
+  return [...open, ...done];
+}
+
+export function taskProgress(tasks) {
+  const live = Object.values(tasks || {}).filter((t) => t && !t._deleted);
+  const done = live.filter((t) => t.done).length;
+  return {
+    done,
+    count: live.length,
+    open: live.length - done,
+    ratio: live.length ? done / live.length : 0,
+  };
+}

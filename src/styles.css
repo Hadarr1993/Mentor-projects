@@ -453,6 +453,38 @@ button, input, select, textarea {
 .check input:focus-visible + .box { box-shadow: 0 0 0 3px rgba(224, 82, 27, 0.3); }
 .check.done .label { text-decoration: line-through; color: var(--ink-3); }
 
+/* ── Tasks ──────────────────────────────────────────────────────────── */
+
+.task-text {
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  transition: color 220ms ease-out;
+}
+
+/* The line is drawn rather than toggled, so closing a task reads as an act
+   rather than as the text simply changing colour. */
+.task-text::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 1.5px;
+  background: currentColor;
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: right center;
+  transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.task-text { position: relative; display: inline-block; max-width: 100%; }
+
+.task-done .task-text { color: var(--ink-3); }
+.task-done .task-text::after { transform: scaleX(1); }
+.task-done { background: var(--cream-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .task-text::after { transition: none; }
+}
+
 /* ── Drop zone ──────────────────────────────────────────────────────── */
 
 .dropzone {
