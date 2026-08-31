@@ -28,7 +28,7 @@ const seeded = await page.evaluate(async () => {
     campCode: 'PRDS-OLDDEVICE1',
     settings: {
       people: 37, reservePct: 15, budget: 3000, startDate: '2026-11-02', days: 6,
-      tornimPerMeal: 2, members: [{ id: 'm1', name: 'הדר' }, { id: 'm2', name: 'שי' }],
+      tornimPerMeal: 2, members: [{ id: 'm1', name: 'תורן א' }, { id: 'm2', name: 'תורן ב' }],
       shared: false, _ts: 1700000000000,
     },
     recipes: {
@@ -36,7 +36,7 @@ const seeded = await page.evaluate(async () => {
              steps: '1. לבשל.', ings: [{ n: 'עדשים', q: 60, u: 'גרם', c: 'יבשים' }], _ts: 1700000000000 },
     },
     sides: {},
-    meals: { 'd0-lunch': { recipeId: 'old', tornim: 'הדר, שי', sides: [], _ts: 1700000000000 } },
+    meals: { 'd0-lunch': { recipeId: 'old', tornim: 'תורן א, תורן ב', sides: [], _ts: 1700000000000 } },
     breakfast: { ings: [{ n: 'לחם פרוס', q: 80, u: 'גרם', c: 'לחם ומאפים' }], _ts: 1700000000000 },
     pantry: { ings: [{ n: 'מים', q: 4000, u: 'מ"ל', c: 'אחר', perDay: true }], _ts: 1700000000000 },
     // The old flat shape — this is what must survive.
@@ -98,7 +98,7 @@ if (stored.settings.people !== 37) fail(`people changed: ${stored.settings.peopl
 else ok('settings preserved (37 people, 15% reserve)');
 if (stored.recipes.old?.name !== 'המתכון הישן שלי') fail('recipe lost');
 else ok('user recipe preserved');
-if (stored.meals['d0-lunch']?.tornim !== 'הדר, שי') fail('meal assignment lost');
+if (stored.meals['d0-lunch']?.tornim !== 'תורן א, תורן ב') fail('meal assignment lost');
 else ok('meal and shift assignment preserved');
 if (stored.campCode !== 'PRDS-OLDDEVICE1') fail('camp code changed — would orphan the cloud doc');
 else ok('camp code unchanged');

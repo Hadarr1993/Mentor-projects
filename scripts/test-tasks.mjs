@@ -25,7 +25,7 @@ await page.waitForSelector('.tabbar');
 console.log('\nsetup:');
 await tab('הגדרות');
 await page.waitForTimeout(300);
-for (const name of ['הדר', 'שי']) {
+for (const name of ['תורן א', 'תורן ב']) {
   await page.getByLabel('שם חבר מחנה').fill(name);
   await page.getByRole('button', { name: /הוסף/ }).first().click();
   await page.waitForTimeout(100);
@@ -33,10 +33,10 @@ for (const name of ['הדר', 'שי']) {
 ok('added two crew members');
 
 const whoCard = page.locator('.card', { hasText: 'מי אני במכשיר הזה' });
-await whoCard.getByRole('button', { name: 'הדר', exact: true }).click();
+await whoCard.getByRole('button', { name: 'תורן א', exact: true }).click();
 await page.waitForTimeout(300);
-if (!(await whoCard.locator('.tag-ok').innerText()).includes('הדר')) fail('identity not set');
-else ok('device identity set to הדר');
+if (!(await whoCard.locator('.tag-ok').innerText()).includes('תורן א')) fail('identity not set');
+else ok('device identity set to תורן א');
 
 /* ── add tasks ─────────────────────────────────────────────────────── */
 console.log('\nadding tasks:');
@@ -53,9 +53,9 @@ const addTask = async (text, owner) => {
   await page.waitForTimeout(250);
 };
 
-await addTask('לנקות שולחנות', 'שי');
+await addTask('לנקות שולחנות', 'תורן ב');
 await addTask('למלא מים', null);
-await addTask('לפרוק את הרכב', 'הדר');
+await addTask('לפרוק את הרכב', 'תורן א');
 
 let order = await rowTexts();
 if (order.length !== 3) fail(`expected 3 tasks, got ${order.length}`);
@@ -63,7 +63,7 @@ else ok(`three tasks in creation order: ${order.join(' → ')}`);
 if (order[0] !== 'לנקות שולחנות') fail('creation order wrong');
 
 const firstRow = page.locator('[data-flip-key]').first();
-if (!(await firstRow.innerText()).includes('שי')) fail('owner chip did not attach a name');
+if (!(await firstRow.innerText()).includes('תורן ב')) fail('owner chip did not attach a name');
 else ok('owner assigned via chip');
 
 /* ── tick: moves to bottom, struck through, records who ────────────── */
@@ -91,8 +91,8 @@ if (lineScale === 'none' || /matrix\(0,/.test(lineScale)) fail(`strike line not 
 else ok(`strike line drawn (${lineScale})`);
 
 const closedText = await closed.innerText();
-if (!closedText.includes('נסגר על ידי הדר')) fail(`closer not recorded: ${closedText.replace(/\n/g, ' ')}`);
-else ok('recorded "נסגר על ידי הדר"');
+if (!closedText.includes('נסגר על ידי תורן א')) fail(`closer not recorded: ${closedText.replace(/\n/g, ' ')}`);
+else ok('recorded "נסגר על ידי תורן א"');
 
 const progress = await page.locator('.card', { hasText: 'נשארו' }).innerText();
 if (!/1\/3/.test(progress)) fail(`progress wrong: ${progress.replace(/\n/g, ' ')}`);
@@ -110,7 +110,7 @@ order = await rowTexts();
 if (order.length !== 3 || order[order.length - 1] !== 'לנקות שולחנות') {
   fail(`tasks did not survive reload: ${order.join(' → ')}`);
 } else ok('tasks and their order survived a reload');
-if (!(await page.locator('[data-flip-key]', { hasText: 'לנקות שולחנות' }).innerText()).includes('הדר')) {
+if (!(await page.locator('[data-flip-key]', { hasText: 'לנקות שולחנות' }).innerText()).includes('תורן א')) {
   fail('closer name lost after reload');
 } else ok('closer name survived');
 

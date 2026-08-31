@@ -11,7 +11,7 @@ const SCRATCH = '/tmp/claude-0/-home-user-Mentor-projects/d352fa57-50fb-5ebf-b11
 
 // A realistic plan: every day filled, sides, crew, prices.
 const state = makeDefaults();
-state.settings.members = ['הדר', 'שי', 'נועה', 'איתי', 'רוני'].map((n, i) => ({ id: `m${i}`, name: n }));
+state.settings.members = ['תורן א', 'תורן ב', 'תורן ג', 'תורן ד', 'תורן ה'].map((n, i) => ({ id: `m${i}`, name: n }));
 const days = dayList(state.settings.startDate, state.settings.days);
 const recipeIds = Object.keys(state.recipes);
 const sideIds = Object.keys(state.sides);

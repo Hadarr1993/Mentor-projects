@@ -66,7 +66,7 @@ else ok('compressed small enough to store many of them');
 console.log('\ncrew and shifts:');
 await tab('הגדרות');
 await page.waitForTimeout(300);
-for (const name of ['הדר', 'שי', 'נועה', 'איתי', 'רוני']) {
+for (const name of ['תורן א', 'תורן ב', 'תורן ג', 'תורן ד', 'תורן ה']) {
   await page.getByLabel('שם חבר מחנה').fill(name);
   await page.getByRole('button', { name: /הוסף/ }).first().click();
   await page.waitForTimeout(80);

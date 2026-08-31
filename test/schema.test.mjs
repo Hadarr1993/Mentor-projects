@@ -17,19 +17,19 @@ test('THE MIGRATION GUARANTEE: a new default field appears without touching user
   const stored = {
     schemaVersion: 1,
     campCode: 'PRDS-USERCODE1',
-    settings: { people: 33, reservePct: 20, members: [{ id: 'a', name: 'הדר' }] },
+    settings: { people: 33, reservePct: 20, members: [{ id: 'a', name: 'תורן א' }] },
     recipes: { mine: { id: 'mine', name: 'המנה שלי', iconKey: 'pasta', steps: 'ערבב', ings: [], _ts: 5 } },
-    meals: { 'd0-lunch': { recipeId: 'mine', tornim: 'הדר', sides: [], _ts: 5 } },
+    meals: { 'd0-lunch': { recipeId: 'mine', tornim: 'תורן א', sides: [], _ts: 5 } },
   };
   const out = hydrate(stored);
 
   // User data survived, exactly.
   assert.equal(out.settings.people, 33);
   assert.equal(out.settings.reservePct, 20);
-  assert.equal(out.settings.members[0].name, 'הדר');
+  assert.equal(out.settings.members[0].name, 'תורן א');
   assert.equal(out.campCode, 'PRDS-USERCODE1');
   assert.equal(out.recipes.mine.name, 'המנה שלי');
-  assert.equal(out.meals['d0-lunch'].tornim, 'הדר');
+  assert.equal(out.meals['d0-lunch'].tornim, 'תורן א');
 
   // Fields the stored doc never had are filled from defaults.
   assert.equal(out.settings.startDate, '2026-11-02');
@@ -116,7 +116,7 @@ test('MIGRATION v1->v2: prices and ticks survive the reshape', async () => {
   const live = {
     schemaVersion: 1,
     campCode: 'PRDS-LIVEDATA01',
-    settings: { people: 40, reservePct: 12, members: [{ id: 'a', name: 'הדר' }] },
+    settings: { people: 40, reservePct: 12, members: [{ id: 'a', name: 'תורן א' }] },
     recipes: { r: { id: 'r', name: 'שלי', iconKey: 'pasta', steps: 'x', ings: [], _ts: 5 } },
     shopping: {
       prices: { 'אורז|גרם': 25, "בצל|יח'": 8, 'מלח|גרם': 3 },
@@ -142,7 +142,7 @@ test('MIGRATION v1->v2: prices and ticks survive the reshape', async () => {
   assert.equal(out.shopping.bought, undefined);
   // Everything else is untouched.
   assert.equal(out.settings.people, 40);
-  assert.equal(out.settings.members[0].name, 'הדר');
+  assert.equal(out.settings.members[0].name, 'תורן א');
   assert.equal(out.campCode, 'PRDS-LIVEDATA01');
   assert.equal(out.recipes.r.name, 'שלי');
 });
@@ -204,14 +204,14 @@ test('an existing document gains tasks without losing anything', async () => {
   const before = {
     schemaVersion: 2,
     campCode: 'PRDS-KEEPTASKS',
-    settings: { people: 44, members: [{ id: 'a', name: 'שי' }] },
+    settings: { people: 44, members: [{ id: 'a', name: 'תורן ב' }] },
     recipes: { r: { id: 'r', name: 'קיים', iconKey: 'pasta', steps: '', ings: [], _ts: 3 } },
     shopping: { items: { 'אורז|גרם': { price: 11, _ts: 3 } }, _ts: 3 },
   };
   const after = hydrate(before);
   assert.deepEqual(after.tasks, {}, 'tasks appears, empty');
   assert.equal(after.settings.people, 44);
-  assert.equal(after.settings.members[0].name, 'שי');
+  assert.equal(after.settings.members[0].name, 'תורן ב');
   assert.equal(after.recipes.r.name, 'קיים');
   assert.equal(after.shopping.items['אורז|גרם'].price, 11);
 });
@@ -220,7 +220,7 @@ test('THE POINT: two people closing different tasks both keep their work', async
   const mine = {
     recipes: {}, sides: {}, meals: {},
     tasks: {
-      clean: { id: 'clean', text: 'לנקות', done: true, doneBy: 'הדר', doneAt: 900, _ts: 900 },
+      clean: { id: 'clean', text: 'לנקות', done: true, doneBy: 'תורן א', doneAt: 900, _ts: 900 },
       water: { id: 'water', text: 'מים', done: false, _ts: 100 },
     },
   };
@@ -228,14 +228,14 @@ test('THE POINT: two people closing different tasks both keep their work', async
     recipes: {}, sides: {}, meals: {},
     tasks: {
       clean: { id: 'clean', text: 'לנקות', done: false, _ts: 100 },
-      water: { id: 'water', text: 'מים', done: true, doneBy: 'שי', doneAt: 950, _ts: 950 },
+      water: { id: 'water', text: 'מים', done: true, doneBy: 'תורן ב', doneAt: 950, _ts: 950 },
       unload: { id: 'unload', text: 'לפרוק', done: false, _ts: 200 },
     },
   };
   const out = mergeState(mine, theirs);
 
-  assert.equal(out.tasks.clean.doneBy, 'הדר', 'my close survives');
-  assert.equal(out.tasks.water.doneBy, 'שי', 'their close survives');
+  assert.equal(out.tasks.clean.doneBy, 'תורן א', 'my close survives');
+  assert.equal(out.tasks.water.doneBy, 'תורן ב', 'their close survives');
   assert.ok(out.tasks.unload, 'a task only they added is kept');
 });
 
