@@ -11,6 +11,8 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
 
+const STRUCTURED_OUTPUTS_BETA = 'structured-outputs-2025-11-13';
+
 // A recipe with a dozen ingredients and real method steps does not fit in
 // the 1200 tokens the original brief suggested; it truncates mid-sentence.
 const MAX_TOKENS = 4000;
@@ -65,7 +67,15 @@ const SYSTEM = `אתה עוזר למנהל מטבח בפסטיבל שמבשל ל
 - יחידות מותרות: ${UNITS.join(' | ')} בלבד.
 - קטגוריות מותרות: ${CATEGORIES.join(' | ')} בלבד.
 - פרט רכיבים אמיתיים שאפשר לקנות בסופר. לעולם אל תכתוב "ירקות מעורבים" או "תבלינים" כפריט אחד — פרט אותם.
-- הוראות ההכנה קצרות ומעשיות, שורה ממוספרת לכל שלב, מותאמות לבישול בשטח.`;
+- הוראות ההכנה קצרות ומעשיות, שורה ממוספרת לכל שלב, מותאמות לבישול בשטח.
+
+פורמט התשובה — קריטי:
+החזר אך ורק אובייקט JSON יחיד, בלי שום טקסט לפניו או אחריו ובלי גדר קוד.
+המבנה המדויק:
+{"dish":"שם המנה","steps":"1. שלב ראשון\\n2. שלב שני","ings":[{"n":"שם המצרך","q":100,"u":"גרם","c":"יבשים"}]}
+"q" הוא מספר (לא מחרוזת) והוא הכמות לאדם אחד.
+"u" הוא בדיוק אחד מתוך: ${UNITS.join(' | ')}
+"c" הוא בדיוק אחד מתוך: ${CATEGORIES.join(' | ')}`;
 
 const PROMPTS = {
   image: 'זהה את המנה בתמונה. החזר את שם המנה, הוראות הכנה, ורשימת מצרכים עם כמות לאדם אחד.',
@@ -110,23 +120,27 @@ export default async function handler(req, res, clientOverride = null) {
   // feature. An earlier version only retried on HTTP 400 and let a local
   // TypeError escape to the user as a raw JavaScript error.
   let structuredError = null;
+  let structuredDiagnosis = null;
   try {
-    const recipe = await askClaude(client, {
+    const { recipe, diagnosis } = await askClaude(client, {
       ...request,
+      // beta.messages.parse() injects this header itself; create() does not,
+      // and without it output_format is a parameter the server does not know.
+      betas: [STRUCTURED_OUTPUTS_BETA],
       output_format: { type: 'json_schema', schema: RECIPE_SCHEMA },
     });
     if (recipe) return res.status(200).json({ recipe, model: MODEL });
-    structuredError = new Error('המודל החזיר תשובה שלא ניתן היה לפענח');
+    structuredDiagnosis = diagnosis;
   } catch (err) {
     structuredError = err;
   }
 
   try {
-    const recipe = await askClaude(client, request);
+    const { recipe, diagnosis } = await askClaude(client, request);
     if (recipe) {
       return res.status(200).json({ recipe, model: MODEL, fallback: true });
     }
-    return fail(res, 502, 'המודל החזיר תשובה שלא ניתן היה לפענח');
+    return fail(res, 502, diagnosis || structuredDiagnosis || 'המודל החזיר תשובה שלא ניתן היה לפענח');
   } catch (err) {
     // Report whichever error is a real API failure; a local fault in building
     // the structured request tells the user nothing useful.
@@ -148,10 +162,38 @@ function makeClient() {
   });
 }
 
-/** One request, one parsed recipe, or null when nothing could be extracted. */
+/**
+ * One request. Returns { recipe } on success, or { diagnosis } describing what
+ * actually came back — a truncated response and a stop_reason distinguish
+ * "the model wrote prose", "the JSON was cut off at max_tokens" and "there was
+ * no text block at all", which are three different problems with three
+ * different fixes and which used to look identical.
+ */
 async function askClaude(client, params) {
   const message = await client.beta.messages.create(params);
-  return extractJson(textOf(message));
+  const text = textOf(message);
+  const recipe = extractJson(text);
+  if (recipe) return { recipe };
+
+  const stop = message?.stop_reason;
+  const kinds = [...new Set((message?.content || []).map((b) => b.type))];
+  const parts = [];
+
+  if (stop === 'max_tokens') {
+    parts.push(`התשובה נקטעה כי נגמרו הטוקנים (max_tokens=${MAX_TOKENS}). נסה תיאור קצר יותר.`);
+  } else if (stop === 'refusal') {
+    parts.push('המודל סירב לענות על הבקשה הזו.');
+  } else if (!text.trim()) {
+    parts.push(`המודל לא החזיר טקסט כלל (בלוקים שהתקבלו: ${kinds.join(', ') || 'אין'}).`);
+  } else {
+    parts.push('המודל ענה, אבל לא בפורמט JSON.');
+  }
+  if (text.trim()) {
+    parts.push(`תחילת התשובה:\n${text.trim().slice(0, 200)}`);
+  }
+  if (stop && stop !== 'end_turn') parts.push(`(stop_reason: ${stop})`);
+
+  return { diagnosis: parts.join('\n') };
 }
 
 function buildContent(mode, body) {

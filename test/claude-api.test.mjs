@@ -128,12 +128,13 @@ test('a reply wrapped in prose still parses', async () => {
   assert.equal(o.body.recipe.dish, 'מרק עדשים כתומות');
 });
 
-test('unparseable output on both paths is reported as such', async () => {
+test('unparseable output on both paths is reported with what came back', async () => {
   const client = fakeClient(async () => ({ content: [{ type: 'text', text: 'אין כאן JSON' }] }));
   const o = res();
   await handler(req(), o, client);
   assert.equal(o.code, 502);
-  assert.match(o.body.error.message, /לפענח/);
+  assert.match(o.body.error.message, /לא בפורמט JSON/);
+  assert.ok(o.body.error.message.includes('אין כאן JSON'), 'must echo the real response');
 });
 
 test('image mode sends a base64 image block', async () => {
@@ -207,4 +208,102 @@ test('the workspace header is sent only when the env var is set', async () => {
   else process.env.ANTHROPIC_WORKSPACE_ID = saved;
   if (savedKey === undefined) delete process.env.ANTHROPIC_API_KEY;
   else process.env.ANTHROPIC_API_KEY = savedKey;
+});
+
+/* ── the beta header and the prompt contract ───────────────────────── */
+
+test('REGRESSION: the structured attempt sends the structured-outputs beta header', async () => {
+  // beta.messages.parse() injects this automatically; create() does not.
+  // Switching from parse to create silently dropped it, which made
+  // output_format a parameter the server did not recognise.
+  let sent = null;
+  const client = fakeClient(async (p) => { sent = p; return textReply(GOOD); });
+  await handler(req(), res(), client);
+
+  assert.ok(Array.isArray(sent.betas), 'betas must be sent');
+  assert.ok(sent.betas.includes('structured-outputs-2025-11-13'),
+    `missing the beta header, got: ${JSON.stringify(sent.betas)}`);
+});
+
+test('REGRESSION: the JSON contract is in the prompt on BOTH attempts', async () => {
+  // output_format must be reinforcement, not the only mechanism. The fallback
+  // strips output_format by design, so without this the fallback can never
+  // succeed — it asks for a recipe without saying in what format.
+  const seen = [];
+  const client = fakeClient(async (p) => {
+    seen.push(p);
+    if (p.output_format) throw Object.assign(new Error('nope'), { status: 400 });
+    return textReply(GOOD);
+  });
+  const o = res();
+  await handler(req(), o, client);
+
+  assert.equal(o.code, 200);
+  assert.equal(seen.length, 2, 'both attempts should have run');
+  for (const [i, p] of seen.entries()) {
+    assert.match(p.system, /JSON/, `attempt ${i + 1} must ask for JSON in the prompt`);
+    assert.match(p.system, /"dish"/, `attempt ${i + 1} must state the exact shape`);
+  }
+  assert.equal(seen[1].output_format, undefined, 'the fallback drops output_format');
+});
+
+test('the fallback alone produces a recipe — the prompt is self-sufficient', async () => {
+  // Simulates output_format being unavailable entirely.
+  const client = fakeClient(async (p) => {
+    if (p.output_format) throw Object.assign(new Error('unknown parameter'), { status: 400 });
+    return textReply(GOOD);
+  });
+  const o = res();
+  await handler(req(), o, client);
+  assert.equal(o.code, 200);
+  assert.equal(o.body.fallback, true);
+  assert.equal(o.body.recipe.dish, 'מרק עדשים כתומות');
+});
+
+/* ── diagnostics ───────────────────────────────────────────────────── */
+
+test('prose instead of JSON reports what the model actually said', async () => {
+  const prose = 'בשמחה! כדי להכין מרק עדשים כתומות תזדקק לעדשים, בצל וגזר...';
+  const client = fakeClient(async () => ({
+    content: [{ type: 'text', text: prose }], stop_reason: 'end_turn',
+  }));
+  const o = res();
+  await handler(req(), o, client);
+
+  assert.equal(o.code, 502);
+  const msg = o.body.error.message;
+  assert.match(msg, /לא בפורמט JSON/);
+  assert.ok(msg.includes('בשמחה'), 'must quote the start of the real response');
+});
+
+test('a truncated response is reported as truncated, not as unparseable', async () => {
+  const client = fakeClient(async () => ({
+    content: [{ type: 'text', text: '{"dish":"מרק","ings":[{"n":"עדש' }],
+    stop_reason: 'max_tokens',
+  }));
+  const o = res();
+  await handler(req(), o, client);
+
+  assert.equal(o.code, 502);
+  assert.match(o.body.error.message, /נקטעה/, 'must name truncation specifically');
+  assert.match(o.body.error.message, /max_tokens/);
+});
+
+test('a response with no text block says so, rather than looking empty', async () => {
+  const client = fakeClient(async () => ({
+    content: [{ type: 'thinking', thinking: '...' }], stop_reason: 'end_turn',
+  }));
+  const o = res();
+  await handler(req(), o, client);
+
+  assert.equal(o.code, 502);
+  assert.match(o.body.error.message, /לא החזיר טקסט/);
+  assert.match(o.body.error.message, /thinking/, 'should name the block types received');
+});
+
+test('a refusal is reported as a refusal', async () => {
+  const client = fakeClient(async () => ({ content: [], stop_reason: 'refusal' }));
+  const o = res();
+  await handler(req(), o, client);
+  assert.match(o.body.error.message, /סירב/);
 });
