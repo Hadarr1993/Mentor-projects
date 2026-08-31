@@ -218,7 +218,8 @@ function recipeCard(state, day, mealKey, { standalone = false } = {}) {
 }
 
 function shoppingSection(groups, state, rows) {
-  const totalPriced = rows.reduce((s, r) => s + (Number(state.shopping?.prices?.[r.key]) || 0), 0);
+  const totalPriced = rows.reduce(
+    (s, r) => s + (Number(state.shopping?.items?.[r.key]?.price) || 0), 0);
   return `<h2 style="margin:26px 0 12px">רשימת קניות</h2>
   <div class="card">
     <div class="spread" style="margin-bottom:12px">

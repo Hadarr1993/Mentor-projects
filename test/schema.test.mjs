@@ -36,7 +36,7 @@ test('THE MIGRATION GUARANTEE: a new default field appears without touching user
   assert.equal(out.settings.tornimPerMeal, 2);
   assert.ok(out.breakfast.ings.length > 0);
   assert.ok(out.pantry.ings.some((i) => i.n === 'מים'));
-  assert.deepEqual(out.shopping.prices, {});
+  assert.deepEqual(out.shopping.items, {}, 'shopping arrives in the v2 per-item shape');
   assert.equal(out.schemaVersion, SCHEMA_VERSION);
 });
 
@@ -106,4 +106,94 @@ test('old tombstones are pruned, fresh ones are kept', () => {
   const s = pruneTombstones({ recipes: { a: { _deleted: true, _ts: old }, b: { _deleted: true, _ts: Date.now() } } });
   assert.equal(s.recipes.a, undefined);
   assert.ok(s.recipes.b);
+});
+
+/* ── v1 -> v2: shopping becomes per-item ───────────────────────────── */
+
+test('MIGRATION v1->v2: prices and ticks survive the reshape', async () => {
+  // This runs against real user data on the next deploy, so it is checked
+  // against a document shaped exactly like one already in the wild.
+  const live = {
+    schemaVersion: 1,
+    campCode: 'PRDS-LIVEDATA01',
+    settings: { people: 40, reservePct: 12, members: [{ id: 'a', name: 'הדר' }] },
+    recipes: { r: { id: 'r', name: 'שלי', iconKey: 'pasta', steps: 'x', ings: [], _ts: 5 } },
+    shopping: {
+      prices: { 'אורז|גרם': 25, "בצל|יח'": 8, 'מלח|גרם': 3 },
+      bought: { 'אורז|גרם': true, 'מלח|גרם': false },
+      _ts: 1700000000000,
+    },
+  };
+  const out = hydrate(live);
+
+  assert.equal(out.schemaVersion, 2);
+  assert.equal(out.shopping.items['אורז|גרם'].price, 25);
+  assert.equal(out.shopping.items['אורז|גרם'].bought, true);
+  assert.equal(out.shopping.items["בצל|יח'"].price, 8);
+  assert.equal(out.shopping.items['מלח|גרם'].price, 3);
+  // A false tick carries no flag; absence is the same as unticked.
+  assert.ok(!out.shopping.items['מלח|גרם'].bought);
+  // Every record must be stamped, or it can never win a merge.
+  for (const item of Object.values(out.shopping.items)) {
+    assert.equal(typeof item._ts, 'number');
+  }
+  // The legacy maps must not linger and shadow the new shape.
+  assert.equal(out.shopping.prices, undefined);
+  assert.equal(out.shopping.bought, undefined);
+  // Everything else is untouched.
+  assert.equal(out.settings.people, 40);
+  assert.equal(out.settings.members[0].name, 'הדר');
+  assert.equal(out.campCode, 'PRDS-LIVEDATA01');
+  assert.equal(out.recipes.r.name, 'שלי');
+});
+
+test('migrating twice is idempotent', async () => {
+  const once = hydrate({ schemaVersion: 1, shopping: { prices: { 'a|גרם': 5 }, bought: { 'a|גרם': true }, _ts: 1 } });
+  const twice = hydrate(once);
+  assert.deepEqual(twice.shopping.items, once.shopping.items);
+  assert.equal(twice.schemaVersion, 2);
+});
+
+test('a v2 document is left alone', async () => {
+  const out = hydrate({
+    schemaVersion: 2,
+    shopping: { items: { 'x|גרם': { price: 9, bought: true, _ts: 77 } }, _ts: 77 },
+  });
+  assert.equal(out.shopping.items['x|גרם'].price, 9);
+  assert.equal(out.shopping.items['x|גרם']._ts, 77);
+});
+
+test('THE FIX: two people ticking different items both keep their work', async () => {
+  // The failure this replaces: shopping merged as one object, so whoever
+  // saved last replaced the other's entire tick list.
+  const mine = {
+    recipes: {}, sides: {}, meals: {},
+    shopping: { items: {
+      'אורז|גרם': { bought: true, _ts: 200 },
+      'בצל|גרם': { bought: false, _ts: 100 },
+    }, _ts: 200 },
+  };
+  const theirs = {
+    recipes: {}, sides: {}, meals: {},
+    shopping: { items: {
+      'אורז|גרם': { bought: false, _ts: 100 },
+      'בצל|גרם': { bought: true, _ts: 300 },
+      'מלח|גרם': { bought: true, price: 4, _ts: 150 },
+    }, _ts: 300 },
+  };
+  const out = mergeState(mine, theirs);
+
+  assert.equal(out.shopping.items['אורז|גרם'].bought, true, 'my newer tick survives');
+  assert.equal(out.shopping.items['בצל|גרם'].bought, true, 'their newer tick survives');
+  assert.equal(out.shopping.items['מלח|גרם'].price, 4, 'an item only they have is kept');
+});
+
+test('a price set by one person is not lost when the other ticks something', async () => {
+  const shopper = { recipes: {}, sides: {}, meals: {},
+    shopping: { items: { 'אורז|גרם': { bought: true, _ts: 500 } }, _ts: 500 } };
+  const pricer = { recipes: {}, sides: {}, meals: {},
+    shopping: { items: { 'בצל|גרם': { price: 12, _ts: 400 } }, _ts: 400 } };
+  const out = mergeState(shopper, pricer);
+  assert.equal(out.shopping.items['אורז|גרם'].bought, true);
+  assert.equal(out.shopping.items['בצל|גרם'].price, 12);
 });

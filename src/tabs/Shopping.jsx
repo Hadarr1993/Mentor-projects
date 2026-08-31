@@ -22,29 +22,42 @@ export function Shopping({ state, update }) {
   const budget = Number(state.settings.budget) || 0;
   const overBudget = budget > 0 && totals.total > budget;
 
-  const setBought = (key, value) =>
+  /** Each item carries its own timestamp, so a teammate ticking a different
+   *  item at the same time merges instead of overwriting the whole list. */
+  const patchItem = (key, patch) =>
     update((s) => ({
       ...s,
-      shopping: touch({ ...s.shopping, bought: { ...s.shopping.bought, [key]: value } }),
+      shopping: touch({
+        ...s.shopping,
+        items: {
+          ...s.shopping.items,
+          [key]: { ...(s.shopping.items?.[key] || {}), ...patch, _ts: now() },
+        },
+      }),
     }));
 
-  const setPrice = (key, value) =>
-    update((s) => {
-      const prices = { ...s.shopping.prices };
-      if (value === null || value === '') delete prices[key];
-      else prices[key] = value;
-      return { ...s, shopping: touch({ ...s.shopping, prices }) };
-    });
+  const setBought = (key, value) => patchItem(key, { bought: value });
 
+  const setPrice = (key, value) =>
+    patchItem(key, { price: value === null || value === '' ? undefined : value });
+
+  /** Clearing has to stamp each item, not drop the map — an unstamped removal
+   *  would be silently undone by the next merge from another device. */
   const clearBought = () =>
-    update((s) => ({ ...s, shopping: touch({ ...s.shopping, bought: {} }) }));
+    update((s) => {
+      const ts = now();
+      const items = Object.fromEntries(
+        Object.entries(s.shopping.items || {}).map(([k, v]) => [k, { ...v, bought: false, _ts: ts }]),
+      );
+      return { ...s, shopping: touch({ ...s.shopping, items }) };
+    });
 
   const toWhatsApp = () => {
     const lines = [`*רשימת קניות — קאמפ פרדייז*`, `${state.settings.people} סועדים · ${days.length} ימים`, ''];
     for (const g of groups) {
       lines.push(`*${g.category}*`);
       for (const r of g.items) {
-        const done = state.shopping.bought?.[r.key] ? '✓ ' : '';
+        const done = state.shopping.items?.[r.key]?.bought ? '✓ ' : '';
         lines.push(`${done}${r.n} — ${formatQty(r.q, r.u)}`);
       }
       lines.push('');
@@ -120,7 +133,7 @@ export function Shopping({ state, update }) {
           </div>
           <div className="stack-2">
             {g.items.map((r) => {
-              const bought = !!state.shopping.bought?.[r.key];
+              const bought = !!state.shopping.items?.[r.key]?.bought;
               return (
                 <div key={r.key} className="row" style={{ gap: '0.5rem' }}>
                   <Check
@@ -145,7 +158,7 @@ export function Shopping({ state, update }) {
                     inputMode="decimal"
                     placeholder="₪"
                     aria-label={`מחיר עבור ${r.n}`}
-                    value={state.shopping.prices?.[r.key] ?? ''}
+                    value={state.shopping.items?.[r.key]?.price ?? ''}
                     onChange={(e) => setPrice(r.key, e.target.value === '' ? null : Number(e.target.value))}
                   />
                 </div>

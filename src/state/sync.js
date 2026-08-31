@@ -67,11 +67,21 @@ export function mergeState(mine, theirs) {
   for (const key of ['recipes', 'sides', 'meals']) {
     out[key] = mergeBag(mine[key], theirs[key]);
   }
-  for (const key of ['settings', 'breakfast', 'pantry', 'shopping', 'extras']) {
+  for (const key of ['settings', 'breakfast', 'pantry', 'extras']) {
     const a = mine[key];
     const b = theirs[key];
     out[key] = (Number(a?._ts) || 0) >= (Number(b?._ts) || 0) ? a : b;
   }
+
+  // Shopping is the one place two people genuinely work at the same time —
+  // both ticking items off in the same shop. Merging it wholesale would let
+  // whoever saved last erase the other's ticks, so merge item by item.
+  out.shopping = {
+    ...(mine.shopping || {}),
+    items: mergeBag(mine.shopping?.items, theirs.shopping?.items),
+    _ts: Math.max(Number(mine.shopping?._ts) || 0, Number(theirs.shopping?._ts) || 0),
+  };
+
   return out;
 }
 

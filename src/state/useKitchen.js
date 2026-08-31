@@ -48,12 +48,15 @@ export function useKitchen() {
       }
 
       let next;
+      let upgradedFrom = null;
       if (raw === undefined || raw === null) {
         next = makeDefaults();
       } else {
         try {
           const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+          const storedVersion = Number(parsed?.schemaVersion) || 0;
           next = hydrate(parsed);
+          if (storedVersion !== next.schemaVersion) upgradedFrom = storedVersion;
         } catch (err) {
           // Never reset on a bad document. Park it and carry on.
           try {
@@ -77,10 +80,21 @@ export function useKitchen() {
       }
 
       if (cancelled) return;
+      latest.current = next;
       setState(next);
       setLoading(false);
+
+      // Persist a schema upgrade once, rather than re-running the migration
+      // on every open and leaving two shapes alive in storage indefinitely.
+      // Only when the version actually moved — never a write just for opening.
+      if (upgradedFrom !== null) {
+        write(next);
+      }
     })();
     return () => { cancelled = true; };
+    // `write` is stable (useCallback with no deps) and defined before this
+    // effect ever runs, so it does not need to be a dependency here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => sync.subscribe(setSyncStatus), []);

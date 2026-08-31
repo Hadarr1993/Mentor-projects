@@ -245,12 +245,12 @@ export function shoppingTotals(rows, shopping, people) {
   let priced = 0;
   let bought = 0;
   for (const r of rows) {
-    const price = Number(shopping?.prices?.[r.key]);
+    const price = Number(shopping?.items?.[r.key]?.price);
     if (Number.isFinite(price) && price > 0) {
       total += price;
       priced++;
     }
-    if (shopping?.bought?.[r.key]) bought++;
+    if (shopping?.items?.[r.key]?.bought) bought++;
   }
   return {
     total,

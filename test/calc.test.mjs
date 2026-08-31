@@ -101,7 +101,12 @@ test('shopping totals track spend, per-person cost and progress', () => {
     { key: ingKey('אורז', 'גרם'), n: 'אורז', u: 'גרם', q: 1000, c: 'יבשים' },
     { key: ingKey('בצל', "יח'"), n: 'בצל', u: "יח'", q: 10, c: 'ירקות ופירות' },
   ];
-  const t = shoppingTotals(rows, { prices: { [rows[0].key]: 30, [rows[1].key]: 20 }, bought: { [rows[0].key]: true } }, 50);
+  const t = shoppingTotals(rows, {
+    items: {
+      [rows[0].key]: { price: 30, bought: true, _ts: 1 },
+      [rows[1].key]: { price: 20, _ts: 1 },
+    },
+  }, 50);
   assert.equal(t.total, 50);
   assert.equal(t.perPerson, 1);
   assert.equal(t.progress, 0.5);
@@ -201,8 +206,9 @@ test('an existing document gains extras without losing anything', async () => {
   assert.equal(after.settings.people, 42);
   assert.equal(after.campCode, 'PRDS-KEEPTHIS1');
   assert.equal(after.recipes.mine.name, 'שלי');
-  assert.equal(after.shopping.prices['אורז|גרם'], 25);
-  assert.equal(after.shopping.bought['אורז|גרם'], true);
+  // v2 folded the flat maps into per-item records; the values must survive.
+  assert.equal(after.shopping.items['אורז|גרם'].price, 25);
+  assert.equal(after.shopping.items['אורז|גרם'].bought, true);
 });
 
 test('an extra with an invalid scale is dropped on load, not kept broken', async () => {

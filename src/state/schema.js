@@ -15,7 +15,7 @@ export const STORAGE_KEY = 'midburn-kitchen';
 export const CORRUPT_KEY = 'midburn-kitchen__corrupt';
 
 /** Bump when the shape changes, and add a matching entry to MIGRATIONS. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const now = () => Date.now();
 
@@ -54,7 +54,9 @@ export function makeDefaults() {
     meals: {},
     breakfast: { ings: DEFAULT_BREAKFAST.map((i) => ({ ...i })), _ts: ts },
     pantry: { ings: DEFAULT_PANTRY.map((i) => ({ ...i })), _ts: ts },
-    shopping: { prices: {}, bought: {}, _ts: ts },
+    // Per-item, each with its own timestamp, so two people ticking things off
+    // in the same shop merge instead of overwriting each other.
+    shopping: { items: {}, _ts: ts },
     // Added after the first release. No migration and no SCHEMA_VERSION bump:
     // deepMergeDefaults fills a missing key from defaults, which is exactly
     // what that mechanism exists for.
@@ -71,6 +73,24 @@ export const MIGRATIONS = {
   // 0 -> 1: the initial shape. Anything without a version is treated as a
   // pre-release document; normalise it rather than dropping it.
   1: (data) => ({ ...data, schemaVersion: 1 }),
+
+  // 1 -> 2: shopping held two flat maps under one timestamp, so a sync merge
+  // took one device's entire tick list and discarded the other's. Reshape to
+  // one stamped record per item so they merge individually.
+  2: (data) => {
+    const ts = Number(data.shopping?._ts) || now();
+    const items = { ...(data.shopping?.items || {}) };
+    const put = (key, patch) => {
+      items[key] = { ...(items[key] || { _ts: ts }), ...patch };
+    };
+    for (const [key, price] of Object.entries(data.shopping?.prices || {})) {
+      if (Number.isFinite(Number(price))) put(key, { price: Number(price) });
+    }
+    for (const [key, bought] of Object.entries(data.shopping?.bought || {})) {
+      if (bought) put(key, { bought: true });
+    }
+    return { ...data, schemaVersion: 2, shopping: { items, _ts: ts } };
+  },
 };
 
 /**
@@ -117,6 +137,15 @@ export function hydrate(raw) {
     }
   }
   merged.extras.items = (merged.extras.items || []).filter(validExtra);
+
+  // The pre-v2 maps are carried through the merge by deepMergeDefaults; drop
+  // them now that MIGRATIONS[2] has folded their contents into `items`.
+  delete merged.shopping.prices;
+  delete merged.shopping.bought;
+  for (const [key, item] of Object.entries(merged.shopping.items || {})) {
+    if (!item || typeof item !== 'object') { delete merged.shopping.items[key]; continue; }
+    if (typeof item._ts !== 'number') item._ts = now();
+  }
   merged.breakfast.ings = (merged.breakfast.ings || []).filter(validIng);
   merged.pantry.ings = (merged.pantry.ings || []).filter(validIng);
 
