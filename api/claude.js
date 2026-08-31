@@ -95,7 +95,7 @@ export default async function handler(req, res, clientOverride = null) {
     return fail(res, 400, err.message);
   }
 
-  const client = clientOverride || new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = clientOverride || makeClient();
   const request = {
     model: MODEL,
     max_tokens: MAX_TOKENS,
@@ -132,6 +132,20 @@ export default async function handler(req, res, clientOverride = null) {
     // the structured request tells the user nothing useful.
     return failFromApi(res, err.status ? err : (structuredError?.status ? structuredError : err));
   }
+}
+
+/**
+ * An identity-linked API key (one created against a user rather than a
+ * workspace) is rejected unless the request names the workspace it acts in.
+ * Set ANTHROPIC_WORKSPACE_ID for those keys; a workspace-scoped key needs
+ * nothing and the header is simply omitted.
+ */
+function makeClient() {
+  const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID?.trim();
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    ...(workspaceId ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } } : {}),
+  });
 }
 
 /** One request, one parsed recipe, or null when nothing could be extracted. */
@@ -189,6 +203,20 @@ export function extractJson(text) {
 function failFromApi(res, err) {
   const status = err?.status || 500;
   const detail = err?.error?.error?.message || err?.message || String(err);
+
+  // This one is worth naming explicitly: the key is valid, it just needs to
+  // say which workspace it acts in, and there are two different ways to fix it.
+  if (/anthropic-workspace-id/i.test(detail)) {
+    return fail(res, status,
+      'המפתח שהוגדר הוא מפתח מקושר-זהות, שדורש לציין באיזה workspace הבקשה פועלת.\n\n' +
+      'שתי דרכים לתקן, שתיהן בקונסולה של Anthropic:\n' +
+      '1. הדרך הפשוטה — צור מפתח חדש מתוך Workspace ספציפי (Settings ← Workspaces ← ' +
+      'בחר workspace ← API Keys), והחלף איתו את ANTHROPIC_API_KEY ב-Vercel.\n' +
+      '2. או השאר את המפתח הנוכחי והוסף ב-Vercel משתנה ANTHROPIC_WORKSPACE_ID ' +
+      'עם מזהה ה-workspace שלך.\n\n' +
+      'בשני המקרים צריך Redeploy אחרי השינוי.');
+  }
+
   const friendly = {
     401: 'מפתח ה-Anthropic נדחה. בדוק את ANTHROPIC_API_KEY בהגדרות Vercel.',
     403: 'אין הרשאה למפתח הזה.',

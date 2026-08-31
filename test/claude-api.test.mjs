@@ -157,3 +157,54 @@ test('a request with no image is refused before calling the API', async () => {
   assert.equal(o.code, 400);
   assert.equal(called, false);
 });
+
+/* ── identity-linked API keys ──────────────────────────────────────── */
+
+test('a workspace-id rejection is translated into an actionable message', async () => {
+  const client = fakeClient(async () => {
+    const e = new Error(
+      'anthropic-workspace-id is required when authenticating with an ' +
+      'identity-linked API key; send the id of the workspace this request acts in.',
+    );
+    e.status = 400;
+    throw e;
+  });
+  const o = res();
+  await handler(req(), o, client);
+
+  assert.equal(o.code, 400);
+  const msg = o.body.error.message;
+  // It must name both fixes, not just restate the English error.
+  assert.match(msg, /Workspace/, 'should point at the Workspace route');
+  assert.match(msg, /ANTHROPIC_WORKSPACE_ID/, 'should name the env var route');
+  assert.match(msg, /Redeploy/, 'should remind about redeploying');
+});
+
+test('the workspace header is sent only when the env var is set', async () => {
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const saved = process.env.ANTHROPIC_WORKSPACE_ID;
+  const savedKey = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+
+  const header = (client) => {
+    const h = client._options?.defaultHeaders;
+    if (!h) return undefined;
+    return h['anthropic-workspace-id'];
+  };
+
+  delete process.env.ANTHROPIC_WORKSPACE_ID;
+  let c = new Anthropic({ apiKey: 'x' });
+  assert.equal(header(c), undefined, 'no header when unset');
+
+  process.env.ANTHROPIC_WORKSPACE_ID = 'wrkspc_abc123';
+  c = new Anthropic({
+    apiKey: 'x',
+    defaultHeaders: { 'anthropic-workspace-id': process.env.ANTHROPIC_WORKSPACE_ID },
+  });
+  assert.equal(header(c), 'wrkspc_abc123', 'header present when set');
+
+  if (saved === undefined) delete process.env.ANTHROPIC_WORKSPACE_ID;
+  else process.env.ANTHROPIC_WORKSPACE_ID = saved;
+  if (savedKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+  else process.env.ANTHROPIC_API_KEY = savedKey;
+});
