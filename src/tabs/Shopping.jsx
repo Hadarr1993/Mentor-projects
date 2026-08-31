@@ -43,7 +43,7 @@ export function Shopping({ state, update }) {
     for (const g of groups) {
       lines.push(`*${g.category}*`);
       for (const r of g.items) {
-        const done = state.shopping.bought?.[r.key] ? '✅ ' : '';
+        const done = state.shopping.bought?.[r.key] ? '✓ ' : '';
         lines.push(`${done}${r.n} — ${formatQty(r.q, r.u)}`);
       }
       lines.push('');

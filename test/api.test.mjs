@@ -45,7 +45,7 @@ test('state endpoint explains a missing backend instead of crashing', async () =
   }
   const handler = await load('../api/state.js');
   const res = mockRes();
-  await handler({ method: 'GET', query: { code: 'PRDS-ABCDEFGH12' } }, res);
+  await handler({ method: 'GET', query: { code: 'PRDS-ABCDEFGH12' } }, res, null);
 
   assert.equal(res.code, 503);
   assert.equal(res.body.error.code, 'no_backend');
