@@ -42,6 +42,7 @@ node scripts/test-flows.mjs    # מתכונים, תמונות, תורנים, א�
 node scripts/test-extras.mjs   # פריטים חופשיים ברשימת הקניות
 node scripts/test-migration.mjs # זורע מסמך v1 אמיתי ומוודא שהוא משודרג בלי אובדן
 node scripts/test-tasks.mjs    # משימות צוות: סימון, סדר, מי סגר, מחיקה
+node scripts/test-mobile.mjs   # מוודא ששדות לא נמעכים לאפס ב-320px ו-390px
 ```
 
 ---

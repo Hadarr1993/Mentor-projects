@@ -49,27 +49,26 @@ export function IngredientEditor({ ings, onChange, units, categories }) {
     <div className="stack-2">
       <div className="tiny dim">כמויות לאדם אחד. האפליקציה מכפילה במספר הסועדים ומוסיפה רזרבה.</div>
       {ings.map((ing, i) => (
-        <div key={i} className="row" style={{ gap: '0.35rem', alignItems: 'center' }}>
+        <div key={i} className="ing-row">
           <input
-            className="input input-sm grow"
+            className="input input-sm ing-name"
             placeholder="שם המצרך"
             value={ing.n}
             aria-label={`שם מצרך ${i + 1}`}
             onChange={(e) => update(i, { n: e.target.value })}
           />
           <input
-            className="input input-sm num"
-            style={{ width: '4.5rem' }}
+            className="input input-sm num ing-qty"
             type="number"
             step="0.1"
             min="0"
+            inputMode="decimal"
             value={ing.q}
             aria-label={`כמות לאדם ${i + 1}`}
             onChange={(e) => update(i, { q: Number(e.target.value) })}
           />
           <select
-            className="select input-sm"
-            style={{ width: '5.2rem' }}
+            className="select input-sm ing-unit"
             value={ing.u}
             aria-label={`יחידה ${i + 1}`}
             onChange={(e) => update(i, { u: e.target.value })}
@@ -77,15 +76,14 @@ export function IngredientEditor({ ings, onChange, units, categories }) {
             {units.map((u) => <option key={u} value={u}>{u}</option>)}
           </select>
           <select
-            className="select input-sm"
-            style={{ width: '8.5rem' }}
+            className="select input-sm ing-cat"
             value={ing.c}
             aria-label={`קטגוריה ${i + 1}`}
             onChange={(e) => update(i, { c: e.target.value })}
           >
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
-          <button type="button" className="btn btn-sm btn-quiet btn-icon"
+          <button type="button" className="btn btn-sm btn-quiet btn-icon ing-del"
                   onClick={() => remove(i)} aria-label="הסר מצרך">
             <Icon name="close" />
           </button>

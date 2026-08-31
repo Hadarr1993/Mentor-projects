@@ -453,6 +453,31 @@ button, input, select, textarea {
 .check input:focus-visible + .box { box-shadow: 0 0 0 3px rgba(224, 82, 27, 0.3); }
 .check.done .label { text-decoration: line-through; color: var(--ink-3); }
 
+/* ── Ingredient editor ──────────────────────────────────────────────────
+   Fixed widths for quantity, unit and category consumed the whole line on a
+   phone, and the name field — which is allowed to shrink — collapsed to
+   nothing with no way to scroll to it. Everything is flex-basis now, so on a
+   narrow screen the name takes its own row and the controls wrap beneath it,
+   while on a wide one the whole thing still sits on a single line.        */
+
+.ing-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.4rem;
+  border-radius: var(--r-sm);
+  background: rgba(107, 59, 110, 0.035);
+}
+
+/* A basis wide enough that it cannot share a line with the controls on a
+   phone, which is what forces the wrap exactly where it should happen. */
+.ing-row .ing-name { flex: 1 1 11rem; min-width: 0; }
+.ing-row .ing-qty  { flex: 0 0 4.2rem; }
+.ing-row .ing-unit { flex: 0 0 5rem; }
+.ing-row .ing-cat  { flex: 1 1 6.5rem; min-width: 0; }
+.ing-row .ing-del  { flex: 0 0 auto; margin-inline-start: auto; }
+
 /* ── Tasks ──────────────────────────────────────────────────────────── */
 
 .task-text {
