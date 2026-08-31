@@ -1,6 +1,4 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 
 /**
  * Claude proxy. The API key lives here and never reaches the browser.
@@ -23,16 +21,42 @@ const CATEGORIES = [
   'לחם ומאפים', 'תבלינים ורטבים', 'אחר',
 ];
 
-const RecipeSchema = z.object({
-  dish: z.string().describe('שם המנה בעברית'),
-  steps: z.string().describe('הוראות הכנה בעברית, שורה ממוספרת לכל שלב'),
-  ings: z.array(z.object({
-    n: z.string().describe('שם המצרך בעברית'),
-    q: z.number().describe('כמות לאדם אחד'),
-    u: z.enum(UNITS),
-    c: z.enum(CATEGORIES),
-  })),
-});
+/**
+ * Plain JSON Schema, written by hand.
+ *
+ * This deliberately does not go through Zod. The SDK's `betaZodOutputFormat`
+ * helper calls `z.toJSONSchema()`, which only exists in Zod v4 — so it throws
+ * a TypeError against Zod v3 even though the SDK's peer range accepts it.
+ * `output_format` only ever needed a plain schema object, so building one
+ * directly removes the version coupling entirely.
+ *
+ * This constrains what the model emits; it is not the validation boundary.
+ * Responses are still checked by extractJson here and validateRecipe on the
+ * client, both of which run on the fallback path too.
+ */
+const RECIPE_SCHEMA = {
+  type: 'object',
+  properties: {
+    dish: { type: 'string', description: 'שם המנה בעברית' },
+    steps: { type: 'string', description: 'הוראות הכנה בעברית, שורה ממוספרת לכל שלב' },
+    ings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          n: { type: 'string', description: 'שם המצרך בעברית' },
+          q: { type: 'number', description: 'כמות לאדם אחד' },
+          u: { type: 'string', enum: UNITS },
+          c: { type: 'string', enum: CATEGORIES },
+        },
+        required: ['n', 'q', 'u', 'c'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['dish', 'steps', 'ings'],
+  additionalProperties: false,
+};
 
 const SYSTEM = `אתה עוזר למנהל מטבח בפסטיבל שמבשל לקבוצה גדולה.
 כל התשובות בעברית בלבד.
@@ -49,11 +73,11 @@ const PROMPTS = {
   steps: (list) => `הנה רשימת המצרכים של מנה בשם "${list.name}":\n${list.lines}\n\nכתוב הוראות הכנה מפורטות. החזר את אותם מצרכים בדיוק ללא שינוי.`,
 };
 
-export default async function handler(req, res) {
+export default async function handler(req, res, clientOverride = null) {
   if (req.method !== 'POST') {
     return fail(res, 405, 'שיטת בקשה לא נתמכת');
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!clientOverride && !process.env.ANTHROPIC_API_KEY) {
     return fail(res, 401,
       'לא הוגדר מפתח Anthropic. הוסף ANTHROPIC_API_KEY בהגדרות הפרויקט ב-Vercel ופרוס מחדש.');
   }
@@ -71,7 +95,7 @@ export default async function handler(req, res) {
     return fail(res, 400, err.message);
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = clientOverride || new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const request = {
     model: MODEL,
     max_tokens: MAX_TOKENS,
@@ -79,35 +103,41 @@ export default async function handler(req, res) {
     messages: [{ role: 'user', content }],
   };
 
+  // Structured output constrains units and categories at the source, but the
+  // plain call works perfectly well without it. So ANY failure of the
+  // structured path — an API rejection, or a local error thrown before the
+  // request is even sent — retries without it rather than failing the
+  // feature. An earlier version only retried on HTTP 400 and let a local
+  // TypeError escape to the user as a raw JavaScript error.
+  let structuredError = null;
   try {
-    // Structured output constrains units and categories at the source.
-    const message = await client.beta.messages.parse({
+    const recipe = await askClaude(client, {
       ...request,
-      output_format: betaZodOutputFormat(RecipeSchema),
+      output_format: { type: 'json_schema', schema: RECIPE_SCHEMA },
     });
-    if (message.parsed_output) {
-      return res.status(200).json({ recipe: message.parsed_output, model: MODEL });
+    if (recipe) return res.status(200).json({ recipe, model: MODEL });
+    structuredError = new Error('המודל החזיר תשובה שלא ניתן היה לפענח');
+  } catch (err) {
+    structuredError = err;
+  }
+
+  try {
+    const recipe = await askClaude(client, request);
+    if (recipe) {
+      return res.status(200).json({ recipe, model: MODEL, fallback: true });
     }
-    // Parsed output can come back null; fall through to the text path
-    // rather than failing a call that did produce an answer.
-    const loose = extractJson(textOf(message));
-    if (loose) return res.status(200).json({ recipe: loose, model: MODEL });
     return fail(res, 502, 'המודל החזיר תשובה שלא ניתן היה לפענח');
   } catch (err) {
-    // Structured output may be unavailable for this model or account.
-    // A plain call plus tolerant extraction still gets the job done.
-    if (isStructuredOutputProblem(err)) {
-      try {
-        const message = await client.messages.create(request);
-        const loose = extractJson(textOf(message));
-        if (loose) return res.status(200).json({ recipe: loose, model: MODEL, fallback: true });
-        return fail(res, 502, 'המודל החזיר תשובה שלא ניתן היה לפענח');
-      } catch (err2) {
-        return failFromApi(res, err2);
-      }
-    }
-    return failFromApi(res, err);
+    // Report whichever error is a real API failure; a local fault in building
+    // the structured request tells the user nothing useful.
+    return failFromApi(res, err.status ? err : (structuredError?.status ? structuredError : err));
   }
+}
+
+/** One request, one parsed recipe, or null when nothing could be extracted. */
+async function askClaude(client, params) {
+  const message = await client.beta.messages.create(params);
+  return extractJson(textOf(message));
 }
 
 function buildContent(mode, body) {
@@ -155,12 +185,6 @@ export function extractJson(text) {
     return null;
   }
 }
-
-const isStructuredOutputProblem = (err) => {
-  const status = err?.status;
-  const msg = String(err?.message || '');
-  return status === 400 && /output_format|structured|schema|beta/i.test(msg);
-};
 
 function failFromApi(res, err) {
   const status = err?.status || 500;

@@ -20,6 +20,15 @@ test('display units roll up and counts round up', () => {
   assert.equal(formatQty(4.0, "יח'"), "4 יח'");
 });
 
+test('counts landing on a whole number are not inflated by float noise', () => {
+  // 1 x 50 x 1.12 is 56.00000000000001 in IEEE754. A naive ceil orders 57.
+  assert.equal(formatQty(1 * 50 * 1.12, "יח'"), "56 יח'");
+  assert.equal(formatQty(2 * 50 * 1.12, "יח'"), "112 יח'");
+  // Genuine fractions must still round up.
+  assert.equal(formatQty(56.3, "יח'"), "57 יח'");
+  assert.equal(formatQty(0.1, "יח'"), "1 יח'");
+});
+
 test('identical ingredients from many sources collapse to one row', () => {
   const rows = mergeIngredients([
     { n: 'אורז', u: 'גרם', q: 100, c: 'יבשים', from: 'מוג׳דרה' },
@@ -128,4 +137,83 @@ test('ice plan finds chilled dishes and sizes the bags', () => {
   assert.ok(plan[0].bags >= 1);
   assert.equal(plan[0].meals[0].name, 'שקשוקה עם פיתות');
   assert.equal(plan[1].chilledGrams, 0);
+});
+
+/* ── free-form shopping items ──────────────────────────────────────── */
+
+test('a fixed item is NOT multiplied by head count', async () => {
+  const { extraQuantity } = await import('../src/lib/calc.js');
+  // The whole point: two rolls of foil are two rolls, not 2 x 50 x 1.12.
+  assert.equal(extraQuantity({ q: 2, scale: 'fixed' }, 50, 6, 12), 2);
+  // A missing scale defaults to fixed rather than silently scaling.
+  assert.equal(extraQuantity({ q: 3 }, 50, 6, 12), 3);
+});
+
+test('a per-person item scales by head count and reserve', async () => {
+  const { extraQuantity } = await import('../src/lib/calc.js');
+  assert.equal(Math.round(extraQuantity({ q: 2, scale: 'person' }, 50, 6, 12)), 112);
+});
+
+test('a per-person-per-day item also scales by days', async () => {
+  const { extraQuantity } = await import('../src/lib/calc.js');
+  assert.equal(Math.round(extraQuantity({ q: 2, scale: 'personDay' }, 50, 6, 12)), 672);
+});
+
+test('free items reach the shopping list with a flat quantity', async () => {
+  const s = makeDefaults();
+  s.extras.items = [
+    { id: 'x1', n: 'גליל אלומיניום', q: 2, u: "יח'", c: 'אחר', scale: 'fixed' },
+    { id: 'x2', n: 'שקיות אשפה', q: 1, u: "יח'", c: 'אחר', scale: 'fixed' },
+  ];
+  const days = dayList(s.settings.startDate, s.settings.days);
+  const rows = shoppingList(s, days);
+  const foil = rows.find((r) => r.n === 'גליל אלומיניום');
+  assert.equal(foil.q, 2, 'must stay 2, not become 112');
+  assert.deepEqual(foil.from, ['נוסף ידנית']);
+  assert.ok(rows.find((r) => r.n === 'שקיות אשפה'));
+});
+
+test('a free item merges with a recipe ingredient of the same name and unit', async () => {
+  const s = makeDefaults();
+  s.meals['d0-lunch'] = { recipeId: 'mujadara', sides: [], _ts: 1 }; // uses אורז
+  s.extras.items = [{ id: 'x1', n: 'אורז', q: 500, u: 'גרם', c: 'יבשים', scale: 'fixed' }];
+  const days = dayList(s.settings.startDate, s.settings.days);
+  const rice = shoppingList(s, days).filter((r) => r.n === 'אורז');
+
+  assert.equal(rice.length, 1, 'should be one consolidated row');
+  // 80g/person x 50 x 1.12 = 4480, plus the flat 500.
+  assert.equal(Math.round(rice[0].q), Math.round(80 * 50 * 1.12) + 500);
+  assert.ok(rice[0].from.includes('נוסף ידנית'));
+});
+
+test('an existing document gains extras without losing anything', async () => {
+  const { hydrate } = await import('../src/state/schema.js');
+  const before = {
+    schemaVersion: 1,
+    campCode: 'PRDS-KEEPTHIS1',
+    settings: { people: 42, reservePct: 8 },
+    recipes: { mine: { id: 'mine', name: 'שלי', iconKey: 'pasta', steps: '', ings: [], _ts: 9 } },
+    shopping: { prices: { 'אורז|גרם': 25 }, bought: { 'אורז|גרם': true }, _ts: 9 },
+  };
+  const after = hydrate(before);
+
+  assert.deepEqual(after.extras.items, [], 'extras appears, empty');
+  assert.equal(after.settings.people, 42);
+  assert.equal(after.campCode, 'PRDS-KEEPTHIS1');
+  assert.equal(after.recipes.mine.name, 'שלי');
+  assert.equal(after.shopping.prices['אורז|גרם'], 25);
+  assert.equal(after.shopping.bought['אורז|גרם'], true);
+});
+
+test('an extra with an invalid scale is dropped on load, not kept broken', async () => {
+  const { hydrate } = await import('../src/state/schema.js');
+  const out = hydrate({
+    schemaVersion: 1,
+    extras: { items: [
+      { id: 'ok', n: 'תקין', q: 1, u: "יח'", c: 'אחר', scale: 'fixed' },
+      { id: 'bad', n: 'רע', q: 1, u: "יח'", c: 'אחר', scale: 'מומצא' },
+    ], _ts: 1 },
+  });
+  assert.equal(out.extras.items.length, 1);
+  assert.equal(out.extras.items[0].n, 'תקין');
 });

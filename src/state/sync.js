@@ -67,7 +67,7 @@ export function mergeState(mine, theirs) {
   for (const key of ['recipes', 'sides', 'meals']) {
     out[key] = mergeBag(mine[key], theirs[key]);
   }
-  for (const key of ['settings', 'breakfast', 'pantry', 'shopping']) {
+  for (const key of ['settings', 'breakfast', 'pantry', 'shopping', 'extras']) {
     const a = mine[key];
     const b = theirs[key];
     out[key] = (Number(a?._ts) || 0) >= (Number(b?._ts) || 0) ? a : b;

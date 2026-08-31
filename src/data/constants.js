@@ -31,6 +31,20 @@ export const EMOJI_TO_ICON_KEY = {
   '🥖': 'bread', '🥗': 'salad', '🫓': 'bread', '🥔': 'other', '🧆': 'other',
 };
 
+/** How a free-form shopping item scales. 'fixed' is the case the recipe
+ *  pipeline cannot express: two rolls of foil are two rolls, not two per head. */
+export const SCALE_MODES = ['fixed', 'person', 'personDay'];
+export const SCALE_LABELS = {
+  fixed: 'כמות קבועה',
+  person: 'לפי אדם',
+  personDay: 'לפי אדם ליום',
+};
+export const SCALE_HINTS = {
+  fixed: 'הכמות שרשמת, בדיוק כפי שהיא',
+  person: 'מוכפל במספר הסועדים',
+  personDay: 'מוכפל בסועדים ובמספר הימים',
+};
+
 export const MEAL_KEYS = ['lunch', 'dinner'];
 export const MEAL_LABELS = { lunch: 'צהריים', dinner: 'ערב' };
 

@@ -5,6 +5,7 @@ import {
   ICON_KEYS,
   UNITS,
   CATEGORIES,
+  SCALE_MODES,
 } from '../data/constants.js';
 import { DEFAULT_RECIPES } from '../data/recipes.js';
 import { DEFAULT_SIDES } from '../data/sides.js';
@@ -54,6 +55,10 @@ export function makeDefaults() {
     breakfast: { ings: DEFAULT_BREAKFAST.map((i) => ({ ...i })), _ts: ts },
     pantry: { ings: DEFAULT_PANTRY.map((i) => ({ ...i })), _ts: ts },
     shopping: { prices: {}, bought: {}, _ts: ts },
+    // Added after the first release. No migration and no SCHEMA_VERSION bump:
+    // deepMergeDefaults fills a missing key from defaults, which is exactly
+    // what that mechanism exists for.
+    extras: { items: [], _ts: ts },
   };
 }
 
@@ -111,6 +116,7 @@ export function hydrate(raw) {
       normaliseItem(item);
     }
   }
+  merged.extras.items = (merged.extras.items || []).filter(validExtra);
   merged.breakfast.ings = (merged.breakfast.ings || []).filter(validIng);
   merged.pantry.ings = (merged.pantry.ings || []).filter(validIng);
 
@@ -127,6 +133,10 @@ function normaliseItem(item) {
   item.ings = (item.ings || []).filter(validIng);
   if (typeof item.steps !== 'string') item.steps = '';
   if (typeof item._ts !== 'number') item._ts = now();
+}
+
+function validExtra(i) {
+  return validIng(i) && SCALE_MODES.includes(i.scale ?? 'fixed');
 }
 
 function validIng(i) {

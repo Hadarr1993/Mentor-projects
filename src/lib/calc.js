@@ -40,9 +40,14 @@ export function mergeIngredients(entries) {
 }
 
 /** Display form. Grams and millilitres roll up at 1000; counts always round up. */
+/** Round up, but absorb floating-point noise first. Without the epsilon,
+ *  1 x 50 x 1.12 evaluates to 56.00000000000001 and gets ordered as 57 —
+ *  a systematic over-count on every quantity that lands on a whole number. */
+export const ceilQty = (v) => Math.ceil(Number(v) - 1e-9);
+
 export function formatQty(q, u) {
   const v = Number(q) || 0;
-  if (u === "יח'") return `${Math.ceil(v)} יח'`;
+  if (u === "יח'") return `${ceilQty(v)} יח'`;
   if (u === 'גרם') {
     if (v >= 1000) return `${trim(v / 1000)} ק"ג`;
     return `${trim(v)} גרם`;
@@ -148,6 +153,26 @@ export function plannedMeals(state, days) {
   return out;
 }
 
+/**
+ * Quantity for a free-form shopping item.
+ *
+ * Unlike everything else in the list, a free item may be a flat amount. Two
+ * rolls of foil are two rolls — multiplying them by the head count, which is
+ * all the recipe pipeline can do, would ask for a hundred.
+ */
+export function extraQuantity(item, people, days, reservePct) {
+  const q = Number(item.q) || 0;
+  switch (item.scale) {
+    case 'person':
+      return scaleIngredient(item, people, reservePct);
+    case 'personDay':
+      return scaleIngredient(item, people, reservePct) * days;
+    case 'fixed':
+    default:
+      return q;
+  }
+}
+
 /* ------------------------------------------------------------- shopping */
 
 /** The consolidated list: every meal, every side, breakfast for the whole
@@ -189,6 +214,14 @@ export function shoppingList(state, days) {
       ...ing,
       q: scaleIngredient(ing, people, reserve) * mult,
       from: 'מזווה קבוע',
+    });
+  }
+
+  for (const item of state.extras?.items || []) {
+    rows.push({
+      ...item,
+      q: extraQuantity(item, people, dayCount, reserve),
+      from: 'נוסף ידנית',
     });
   }
 
@@ -258,7 +291,7 @@ export function icePlan(state, days) {
       day,
       meals,
       chilledGrams,
-      bags: Math.ceil(chilledGrams / ICE_BAG_COVERS_GRAMS),
+      bags: ceilQty(chilledGrams / ICE_BAG_COVERS_GRAMS),
     };
   });
 }
