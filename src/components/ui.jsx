@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Reveal } from './motion.jsx';
 import { Icon } from './Icon.jsx';
 
 /* ── Toast ──────────────────────────────────────────────────────────── */
@@ -197,7 +198,9 @@ export function Collapsible({ title, icon, defaultOpen = false, right, children 
         </button>
         {right}
       </div>
-      {open && <div style={{ marginTop: 'var(--s3)' }}>{children}</div>}
+      <Reveal open={open}>
+        <div style={{ marginTop: 'var(--s3)' }}>{children}</div>
+      </Reveal>
     </div>
   );
 }

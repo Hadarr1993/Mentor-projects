@@ -10,6 +10,12 @@
   --surface:    #FFFAF3;
   --fire:       #E0521B;
   --fire-deep:  #B93F12;
+  /* The primary button's own ramp. The brand fire→gold gradient drops white
+     text to 2.02:1 at the gold end — unreadable in daylight — so the button
+     uses a darker ramp that holds 6.57:1 → 4.72:1 across its whole length.
+     Gold keeps its role in the glow and the border, where nothing sits on it. */
+  --fire-btn-a: #A6380F;
+  --fire-btn-b: #C9491A;
   --gold:       #F2A65A;
   --rose:       #D96A8A;
   --plum:       #6B3B6E;
@@ -17,7 +23,10 @@
 
   --ink:        #3A2317;
   --ink-2:      #6B5344;
-  --ink-3:      #9A8574;
+  /* 4.67:1 on the page ground. The previous #9A8574 measured 3.12:1, which
+     fails AA — and it is used for hints and small labels, where contrast
+     matters most and desert sun is least forgiving. */
+  --ink-3:      #7E6857;
 
   --danger:     #B3261E;
   --danger-bg:  #FDECEA;
@@ -140,6 +149,10 @@ button, input, select, textarea {
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.4em;
   padding: 0.6em 1.05em;
+  /* 44px is the floor for anything a thumb has to find. Buttons sat at 40,
+     and the collapsible headers — which override the padding inline — sat at
+     28. A min-height survives that override; padding does not. */
+  min-height: 2.75rem;
   border: 0;
   border-radius: 999px;
   background: var(--cream-2);
@@ -160,20 +173,47 @@ button, input, select, textarea {
 .btn[disabled] { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--fire) 0%, var(--gold) 130%);
+  background: linear-gradient(135deg, var(--fire-btn-a) 0%, var(--fire-btn-b) 100%);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(224, 82, 27, 0.3);
+  box-shadow: 0 2px 8px rgba(224, 82, 27, 0.32), 0 0 0 1px rgba(242, 166, 90, 0.35) inset;
 }
-.btn-primary:hover { background: linear-gradient(135deg, var(--fire-deep) 0%, var(--fire) 130%); }
+.btn-primary:hover {
+  background: linear-gradient(135deg, #94320D 0%, #B33F14 100%);
+}
 
 .btn-quiet { background: transparent; color: var(--ink-2); }
 .btn-quiet:hover { background: rgba(107, 59, 110, 0.07); color: var(--ink); }
+
+/* A link inside a sentence, not a control on its own line. Stretching it to
+   44px would tear a hole in the paragraph it lives in, so it stays inline —
+   the one deliberate exception to the touch-target floor, and the reason the
+   audit in scripts/test-mobile.mjs skips this class by name. */
+.link {
+  display: inline; padding: 0; border: 0; background: none;
+  color: var(--fire-deep); font: inherit; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 2px;
+  cursor: pointer;
+}
+.link:hover { color: var(--fire); }
+.link:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(224, 82, 27, 0.28); border-radius: 4px; }
 
 .btn-danger { background: var(--danger-bg); color: var(--danger); }
 .btn-danger:hover { background: #F9DAD6; }
 
 .btn-sm { padding: 0.4em 0.8em; font-size: 0.82rem; }
 .btn-icon { padding: 0.5em; border-radius: 50%; }
+
+/* ── Touch targets ──────────────────────────────────────────────────────
+   A control can look small and still be easy to hit. These rules grow the
+   hit area to 44px without changing what is drawn, so the interface keeps
+   its density while a greasy thumb in a supermarket still lands on it.
+   Measured before this: checkboxes were 22px and icon buttons 26px.     */
+
+.btn-sm, .btn-icon {
+  position: relative;
+  min-height: 2.75rem;   /* 44px at the default text size */
+  min-width: 2.75rem;
+}
 
 .field { display: flex; flex-direction: column; gap: 0.3rem; }
 .field > label { font-size: 0.8rem; font-weight: 600; color: var(--ink-2); letter-spacing: 0.01em; }
@@ -198,12 +238,18 @@ button, input, select, textarea {
   background-repeat: no-repeat; background-position: left 0.65rem center;
 }
 .input-sm { padding: 0.35em 0.55em; font-size: 0.85rem; }
+/* Number fields are tapped and typed into on a phone; 32px was too short. */
+input.input-sm, select.input-sm { min-height: 2.75rem; }
 
 /* ── Chips ──────────────────────────────────────────────────────────── */
 
 .chip {
   display: inline-flex; align-items: center; gap: 0.35em;
-  padding: 0.35em 0.75em;
+  padding: 0.5em 0.85em;
+  /* Chips are picked with a thumb like anything else — the side pickers and
+     the quantity-mode selector are chips. 2.5rem left them at 40px. */
+  min-height: 2.75rem; min-width: 2.75rem;
+  justify-content: center;
   border: 1.5px solid var(--edge);
   border-radius: 999px;
   background: var(--surface);
@@ -436,10 +482,15 @@ button, input, select, textarea {
 .check {
   display: flex; align-items: center; gap: var(--s2);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
+  /* The row is the target, not just the box: the most-tapped control in the
+     app is the shopping tick, and a 22px square is a guaranteed miss. */
+  min-height: 2.75rem;
+  padding-block: 0.25rem;
 }
 .check input { position: absolute; opacity: 0; width: 0; height: 0; }
 .check .box {
   flex: 0 0 auto;
+  position: relative;
   display: grid; place-items: center;
   width: 1.35rem; height: 1.35rem;
   border: 2px solid var(--ink-3); border-radius: 7px;
@@ -451,6 +502,15 @@ button, input, select, textarea {
   background: var(--fire); border-color: var(--fire); color: #fff;
 }
 .check input:focus-visible + .box { box-shadow: 0 0 0 3px rgba(224, 82, 27, 0.3); }
+
+/* The square stays 22px; its reach does not. */
+.check .box::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 2.75rem; height: 2.75rem;
+  transform: translate(-50%, -50%);
+}
 .check.done .label { text-decoration: line-through; color: var(--ink-3); }
 
 /* ── Ingredient editor ──────────────────────────────────────────────────

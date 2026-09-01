@@ -241,8 +241,7 @@ function SwitchCamp({ state, setState, saveNow, setError }) {
         נתוני המחנה יחליפו את מה שיש במכשיר הזה.{' '}
         <button
           type="button"
-          className="btn btn-quiet"
-          style={{ padding: 0, background: 'none', textDecoration: 'underline', fontSize: 'inherit' }}
+          className="link"
           onClick={() => {
             downloadFile(
               `camp-paradise-backup-${new Date().toISOString().slice(0, 10)}.json`,

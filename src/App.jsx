@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from './components/Icon.jsx';
 import { SunsetHeader } from './components/SunsetHeader.jsx';
 import { ToastHost, ErrorBox, toast } from './components/ui.jsx';
+import { TabPanel } from './components/motion.jsx';
 import { useKitchen } from './state/useKitchen.js';
 import { useDevice } from './state/useDevice.js';
 import { dayList } from './lib/calc.js';
@@ -31,6 +32,24 @@ export default function App() {
   const kitchen = useKitchen();
   const device = useDevice();
   const [tab, setTab] = useState('today');
+
+  /**
+   * Which way the next panel should arrive from.
+   *
+   * The tab bar is RTL, so a higher index sits further left on screen and its
+   * panel should come in from the left. CSS transforms are physical, so that
+   * is a negative X.
+   */
+  const [direction, setDirection] = useState(0);
+  const lastIndex = useRef(0);
+  const goTo = (id) => {
+    const from = lastIndex.current;
+    const to = TABS.findIndex((t) => t.id === id);
+    setDirection(to === from ? 0 : to > from ? -1 : 1);
+    lastIndex.current = to;
+    setTab(id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const {
     state, loading, update, saveNow, setState,
@@ -129,17 +148,19 @@ export default function App() {
           </div>
         )}
 
-        <Body
-          state={state}
-          update={update}
-          saveNow={saveNow}
-          setState={setState}
-          syncStatus={syncStatus}
-          onRefreshCloud={refreshFromCloud}
-          onGoToWeek={() => setTab('week')}
-          me={device.me}
-          chooseMe={device.chooseMe}
-        />
+        <TabPanel tabKey={tab} direction={direction}>
+          <Body
+            state={state}
+            update={update}
+            saveNow={saveNow}
+            setState={setState}
+            syncStatus={syncStatus}
+            onRefreshCloud={refreshFromCloud}
+            onGoToWeek={() => goTo('week')}
+            me={device.me}
+            chooseMe={device.chooseMe}
+          />
+        </TabPanel>
       </main>
 
       <nav className="tabbar" aria-label="ניווט ראשי">
@@ -152,7 +173,7 @@ export default function App() {
               className="tab"
               aria-selected={t.id === tab}
               aria-controls="tabpanel"
-              onClick={() => { setTab(t.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onClick={() => goTo(t.id)}
             >
               <Icon name={t.icon} size="1.35rem" strokeWidth={t.id === tab ? 2.25 : 2} />
               {t.label}

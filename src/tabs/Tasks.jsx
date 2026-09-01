@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon.jsx';
 import { Check, ConfirmButton, Empty, toast } from '../components/ui.jsx';
 import { sortedTasks, taskProgress } from '../lib/calc.js';
 import { useFlipList } from '../lib/spring.js';
+import { haptic } from '../lib/haptics.js';
 import { touch } from '../state/useKitchen.js';
 import { now } from '../state/schema.js';
 
@@ -50,8 +51,11 @@ export function Tasks({ state, update, me }) {
     // row is the common case, and re-picking each time is friction.
   };
 
-  const setDone = (task, done) =>
-    update((s) => ({
+  const setDone = (task, done) => {
+    // Only on the way to done. Closing a task is the commit; reopening one is
+    // a correction, and a buzz would read as a second confirmation.
+    if (done) haptic();
+    return update((s) => ({
       ...s,
       tasks: {
         ...s.tasks,
@@ -64,6 +68,7 @@ export function Tasks({ state, update, me }) {
         }),
       },
     }));
+  };
 
   const remove = (id) =>
     update((s) => ({ ...s, tasks: { ...s.tasks, [id]: { id, _deleted: true, _ts: now() } } }));

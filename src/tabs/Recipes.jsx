@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon.jsx';
 import { IngredientEditor } from '../components/IngredientTable.jsx';
 import { ImageDrop } from '../components/ImageDrop.jsx';
+import { Sheet } from '../components/motion.jsx';
 import { ConfirmButton, RecipeMark, Empty, ErrorBox, toast } from '../components/ui.jsx';
 import { UNITS, CATEGORIES, ICON_KEYS } from '../data/constants.js';
 import { identifyFromImage, recipeFromText, stepsForIngredients, guessIconKey } from '../lib/ai.js';
@@ -22,6 +23,23 @@ export function Recipes({ state, update, saveNow }) {
   const [editing, setEditing] = useState(null);
   const [adding, setAdding] = useState(null); // 'manual' | 'text' | 'image'
   const [query, setQuery] = useState('');
+  // True from the moment the editor starts closing until it has left, so the
+  // list does not reappear underneath a sheet that is still on screen.
+  const [closing, setClosing] = useState(false);
+
+  /**
+   * Where the editor should grow from and shrink back into.
+   *
+   * Captured at the press, in client coordinates. The layout changes when the
+   * editor takes over, so this is the point the button occupied a moment ago
+   * rather than a live position — close enough that the sheet still reads as
+   * coming out of the control that was pressed.
+   */
+  const origin = useRef(null);
+  const markOrigin = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    origin.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
 
   const recipes = useMemo(() => {
     const all = Object.values(state.recipes || {}).filter((r) => r && !r._deleted);
@@ -49,6 +67,8 @@ export function Recipes({ state, update, saveNow }) {
     }));
     if (ok) {
       toast(recipe.id ? 'המתכון עודכן' : 'המתכון נשמר');
+      // Leave the same way it arrived — saving is a close, not a disappearance.
+      setClosing(true);
       setEditing(null);
       setAdding(null);
     } else {
@@ -67,24 +87,27 @@ export function Recipes({ state, update, saveNow }) {
     toast('המתכון נמחק');
   };
 
-  if (editing || adding === 'manual') {
-    return (
-      <RecipeEditor
-        initial={editing || blank()}
-        onCancel={() => { setEditing(null); setAdding(null); }}
-        onSave={save}
-      />
-    );
-  }
   if (adding === 'text') return <FromText onCancel={() => setAdding(null)} onDraft={setEditing} />;
   if (adding === 'image') return <FromImage onCancel={() => setAdding(null)} onDraft={setEditing} />;
+
+  const editorOpen = !!editing || adding === 'manual';
+  const closeEditor = () => { setClosing(true); setEditing(null); setAdding(null); };
+
+  if (editorOpen || closing) {
+    return (
+      <Sheet open={editorOpen} originRef={origin} onExited={() => setClosing(false)}>
+        <RecipeEditor initial={editing || blank()} onCancel={closeEditor} onSave={save} />
+      </Sheet>
+    );
+  }
 
   return (
     <div className="stack">
       <div className="card">
         <h2 style={{ marginBottom: '0.75rem' }}>הוספת מתכון</h2>
         <div className="row wrap">
-          <button type="button" className="btn btn-primary" onClick={() => setAdding('manual')}>
+          <button type="button" className="btn btn-primary"
+                  onClick={(e) => { markOrigin(e); setAdding('manual'); }}>
             <Icon name="add" />ידני
           </button>
           <button type="button" className="btn" onClick={() => setAdding('text')}>
@@ -130,7 +153,8 @@ export function Recipes({ state, update, saveNow }) {
               </div>
             </div>
             <div className="row" style={{ marginTop: '0.75rem', gap: '0.4rem' }}>
-              <button type="button" className="btn btn-sm" onClick={() => setEditing(r)}>
+              <button type="button" className="btn btn-sm"
+                      onClick={(e) => { markOrigin(e); setEditing(r); }}>
                 <Icon name="edit" />ערוך
               </button>
               <ConfirmButton onConfirm={() => remove(r.id)} />

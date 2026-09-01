@@ -27,7 +27,7 @@ npx vercel dev
 ## בדיקות
 
 ```bash
-npm test                       # 71 בדיקות: חישובים, סכמה, מיגרציות, מיזוג, API
+npm test                       # 87 בדיקות: חישובים, סכמה, מיגרציות, מיזוג, API, ניגודיות צבע
 node scripts/test-export.mjs   # מוודא שהייצוא נטען עם רשת חסומה לחלוטין
 ```
 
@@ -42,7 +42,8 @@ node scripts/test-flows.mjs    # מתכונים, תמונות, תורנים, א�
 node scripts/test-extras.mjs   # פריטים חופשיים ברשימת הקניות
 node scripts/test-migration.mjs # זורע מסמך v1 אמיתי ומוודא שהוא משודרג בלי אובדן
 node scripts/test-tasks.mjs    # משימות צוות: סימון, סדר, מי סגר, מחיקה
-node scripts/test-mobile.mjs   # מוודא ששדות לא נמעכים לאפס ב-320px ו-390px
+node scripts/test-mobile.mjs   # שדות לא נמעכים לאפס, וכל פקד מגיע ל-44px ב-320px ו-390px
+node scripts/test-motion.mjs   # מעברי מסך: מה נשאר על המסך אחרי שהתנועה נגמרה
 node scripts/test-live.mjs     # שני מכשירים במחנה אחד: הצטרפות ועדכון חי
 ```
 

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Icon, categoryIcon } from '../components/Icon.jsx';
+import { Reveal } from '../components/motion.jsx';
 import { Check, Empty, ConfirmButton, useCopy, toast } from '../components/ui.jsx';
 import { CATEGORIES, UNITS, SCALE_MODES, SCALE_LABELS, SCALE_HINTS } from '../data/constants.js';
 import { dayList, shoppingList, groupByCategory, shoppingTotals, formatQty } from '../lib/calc.js';
+import { haptic } from '../lib/haptics.js';
 import { touch } from '../state/useKitchen.js';
 import { now } from '../state/schema.js';
 
@@ -36,7 +38,11 @@ export function Shopping({ state, update }) {
       }),
     }));
 
-  const setBought = (key, value) => patchItem(key, { bought: value });
+  const setBought = (key, value) => {
+    // The tick, not the untick: the buzz confirms an item is in the basket.
+    if (value) haptic();
+    return patchItem(key, { bought: value });
+  };
 
   const setPrice = (key, value) =>
     patchItem(key, { price: value === null || value === '' ? undefined : value });
@@ -249,7 +255,7 @@ function AddExtra({ state, update }) {
         </div>
       )}
 
-      {open && (
+      <Reveal open={open}>
         <div className="stack-2" style={{ marginTop: '0.25rem' }}>
           <div className="row wrap" style={{ gap: '0.35rem' }}>
             <input
@@ -314,7 +320,7 @@ function AddExtra({ state, update }) {
             <Icon name="add" />הוסף לרשימה
           </button>
         </div>
-      )}
+      </Reveal>
     </div>
   );
 }
