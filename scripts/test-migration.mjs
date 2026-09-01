@@ -5,6 +5,7 @@
  * user's prices and ticks are still there.
  */
 import { chromium } from 'playwright';
+import { SCHEMA_VERSION } from '../src/state/schema.js';
 
 const BASE = process.env.SMOKE_URL || 'http://localhost:4173';
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
@@ -81,8 +82,11 @@ const stored = await page.evaluate(async () => {
   return JSON.parse(raw);
 });
 
-if (stored.schemaVersion !== 2) fail(`expected schemaVersion 2, got ${stored.schemaVersion}`);
-else ok('document upgraded to schemaVersion 2');
+if (stored.schemaVersion !== SCHEMA_VERSION) {
+  fail(`expected schemaVersion ${SCHEMA_VERSION}, got ${stored.schemaVersion}`);
+} else ok(`document upgraded through the chain to schemaVersion ${SCHEMA_VERSION}`);
+if ('shared' in (stored.settings || {})) fail('the personal/shared flag was not removed');
+else ok('the obsolete shared flag is gone');
 
 const items = stored.shopping.items || {};
 if (items['עדשים|גרם']?.price !== 42) fail(`price lost: ${JSON.stringify(items['עדשים|גרם'])}`);

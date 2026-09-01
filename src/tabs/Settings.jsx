@@ -3,7 +3,8 @@ import { Icon } from '../components/Icon.jsx';
 import { IngredientEditor } from '../components/IngredientTable.jsx';
 import { Collapsible, ConfirmButton, ErrorBox, useCopy, toast } from '../components/ui.jsx';
 import { UNITS, CATEGORIES, ICON_KEYS } from '../data/constants.js';
-import { makeDefaults, newCampCode, now } from '../state/schema.js';
+import { makeDefaults, newCampCode, now, hydrate } from '../state/schema.js';
+import { downloadFile } from '../lib/exportHtml.js';
 import { touch } from '../state/useKitchen.js';
 import * as sync from '../state/sync.js';
 
@@ -13,30 +14,6 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
 
   const patchSettings = (changes) =>
     update((s) => ({ ...s, settings: touch({ ...s.settings, ...changes }) }));
-
-  /* Switching scope copies the current data into the new one, so nothing
-     is stranded behind a toggle. */
-  const toggleShared = async (shared) => {
-    setError(null);
-    try {
-      if (shared) {
-        sync.setCampCode(state.campCode);
-        const theirs = await sync.pull();
-        const merged = theirs ? sync.mergeState(state, theirs) : state;
-        const next = { ...merged, settings: touch({ ...merged.settings, shared: true }) };
-        setState(next);
-        await saveNow(() => next);
-        await sync.push(next);
-        toast('עברת למצב משותף — הנתונים הועלו לענן');
-      } else {
-        patchSettings({ shared: false });
-        toast('עברת למצב אישי — הנתונים נשארים במכשיר');
-      }
-    } catch (err) {
-      setError(`המעבר נכשל: ${err.message}`);
-      patchSettings({ shared: false });
-    }
-  };
 
   const regenerateCode = () => {
     const code = newCampCode();
@@ -106,28 +83,17 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
       {/* ── Who is holding this device ─────────────────────────── */}
       <WhoAmICard state={state} me={me} chooseMe={chooseMe} />
 
-      {/* ── Sharing ────────────────────────────────────────────── */}
+      {/* ── The camp ───────────────────────────────────────────── */}
       <div className="card stack-2">
         <div className="section-title">
-          <Icon name={state.settings.shared ? 'users' : 'lock'} strokeWidth={1.9} />
-          <h2 className="grow">שיתוף עם המחנה</h2>
-        </div>
-
-        <div className="row wrap" style={{ gap: '0.4rem' }}>
-          <button type="button" className="chip" aria-pressed={!state.settings.shared}
-                  onClick={() => toggleShared(false)}>
-            <Icon name="lock" size="0.95em" />אישי
-          </button>
-          <button type="button" className="chip" aria-pressed={state.settings.shared}
-                  onClick={() => toggleShared(true)}>
-            <Icon name="users" size="0.95em" />משותף
-          </button>
+          <Icon name="users" strokeWidth={1.9} />
+          <h2 className="grow">המחנה שלך</h2>
+          {syncStatus?.connected && <span className="tag tag-ok">מחובר</span>}
         </div>
 
         <p className="small muted">
-          {state.settings.shared
-            ? 'הנתונים מסונכרנים בין כל מי שמזין את קוד המחנה. השינוי האחרון על כל פריט גובר, ולכן עדיף לא לערוך את אותו מתכון בו-זמנית.'
-            : 'הנתונים נשמרים רק במכשיר הזה. אפשר בכל רגע לעבור למצב משותף — הנתונים הנוכחיים יועתקו לענן.'}
+          כל מי שמזין את הקוד הזה רואה ועורך את אותם נתונים, והעדכונים מגיעים לבד.
+          אין מה להעלות או להוריד ידנית.
         </p>
 
         <div className="field">
@@ -139,41 +105,23 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
             </button>
           </div>
           <div className="tiny dim">
-            כל מי שמחזיק בקוד יכול לקרוא ולערוך את הנתונים. שתף אותו רק עם הצוות.
+            כל מי שמחזיק בקוד יכול לקרוא ולערוך. שתף אותו רק עם הצוות.
           </div>
         </div>
+
+        <SwitchCamp state={state} setState={setState} saveNow={saveNow} setError={setError} />
 
         <div className="row wrap">
-          <input
-            className="input grow"
-            placeholder="הצטרף לקוד מחנה קיים"
-            aria-label="הצטרף לקוד מחנה קיים"
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return;
-              const code = e.target.value.trim().toUpperCase();
-              if (!/^PRDS-[A-Z0-9]{6,32}$/.test(code)) {
-                setError('קוד מחנה לא תקין. הפורמט הוא PRDS- ואחריו אותיות וספרות.');
-                return;
-              }
-              update((s) => ({ ...s, campCode: code }));
-              sync.setCampCode(code);
-              e.target.value = '';
-              toast('הקוד עודכן — הפעל מצב משותף כדי למשוך נתונים');
-            }}
-          />
-          <button type="button" className="btn btn-quiet btn-sm" onClick={regenerateCode}>
-            <Icon name="refresh" />קוד חדש
+          <button type="button" className="btn btn-quiet btn-sm" onClick={onRefreshCloud}>
+            <Icon name="refresh" />רענן עכשיו
           </button>
+          <button type="button" className="btn btn-quiet btn-sm" onClick={regenerateCode}>
+            <Icon name="add" />מחנה חדש
+          </button>
+          {syncStatus?.error && (
+            <span className="tiny" style={{ color: 'var(--danger)' }}>{syncStatus.error}</span>
+          )}
         </div>
-
-        {state.settings.shared && (
-          <div className="row wrap">
-            <button type="button" className="btn" onClick={onRefreshCloud}>
-              <Icon name="refresh" />רענן מהענן
-            </button>
-            {syncStatus?.error && <span className="tiny" style={{ color: 'var(--danger)' }}>{syncStatus.error}</span>}
-          </div>
-        )}
       </div>
 
       {/* ── Breakfast ──────────────────────────────────────────── */}
@@ -218,6 +166,94 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
         </p>
         <ConfirmButton onConfirm={resetAll} className="btn btn-danger"
                        icon="reset">אפס הכל</ConfirmButton>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------- switch camp */
+
+/**
+ * Move this device to a different camp.
+ *
+ * Joining is a read: the camp's document replaces what is here. That is the
+ * whole point of the server owning the document — there is no negotiation
+ * between two copies, and so no way for a fresh set of defaults to overwrite
+ * a teammate's planning.
+ *
+ * Because it replaces, it offers a backup first. The offer is unconditional
+ * rather than clever: it costs one tap and removes any need to reason about
+ * whether the local document mattered.
+ */
+function SwitchCamp({ state, setState, saveNow, setError }) {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const join = async () => {
+    const wanted = code.trim().toUpperCase();
+    if (!/^PRDS-[A-Z0-9]{6,32}$/.test(wanted)) {
+      setError('קוד מחנה לא תקין. הפורמט הוא PRDS- ואחריו אותיות וספרות.');
+      return;
+    }
+    if (wanted === state.campCode) { toast('אתה כבר במחנה הזה'); return; }
+
+    setBusy(true);
+    setError(null);
+    try {
+      sync.setCampCode(wanted);
+      const theirs = await sync.fetchDoc();
+      const next = theirs
+        ? { ...hydrate(theirs), campCode: wanted }
+        : { ...state, campCode: wanted };
+
+      setState(next);
+      await saveNow(() => next);
+      if (!theirs) sync.enqueue((doc) => doc || next);
+      setCode('');
+      toast(theirs ? 'הצטרפת למחנה — הנתונים נטענו' : 'המחנה נוצר עם הנתונים שלך');
+    } catch (err) {
+      // Put the device back where it was rather than leaving it half-moved.
+      sync.setCampCode(state.campCode);
+      setError(`ההצטרפות נכשלה: ${err.message}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="field">
+      <label htmlFor="s-join">הצטרף למחנה אחר</label>
+      <div className="row">
+        <input
+          id="s-join"
+          className="input grow"
+          placeholder="PRDS-..."
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') join(); }}
+        />
+        <button type="button" className="btn btn-sm" onClick={join} disabled={busy}>
+          <Icon name={busy ? 'spinner' : 'download'} className={busy ? 'spin' : ''} />
+          הצטרף
+        </button>
+      </div>
+      <div className="tiny dim">
+        נתוני המחנה יחליפו את מה שיש במכשיר הזה.{' '}
+        <button
+          type="button"
+          className="btn btn-quiet"
+          style={{ padding: 0, background: 'none', textDecoration: 'underline', fontSize: 'inherit' }}
+          onClick={() => {
+            downloadFile(
+              `camp-paradise-backup-${new Date().toISOString().slice(0, 10)}.json`,
+              JSON.stringify(state, null, 2),
+              'application/json',
+            );
+            toast('הגיבוי הורד');
+          }}
+        >
+          הורד גיבוי קודם
+        </button>
       </div>
     </div>
   );

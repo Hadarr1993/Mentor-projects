@@ -68,7 +68,6 @@ export default function App() {
 
       <StatusBar
         saveState={saveState}
-        shared={state.settings.shared}
         syncStatus={syncStatus}
         onRefresh={async () => {
           try {
@@ -168,7 +167,7 @@ export default function App() {
 }
 
 /** Save state and cloud state, always visible, never in the way. */
-function StatusBar({ saveState, shared, syncStatus, onRefresh }) {
+function StatusBar({ saveState, syncStatus, onRefresh }) {
   const [showSaved, setShowSaved] = useState(false);
 
   useEffect(() => {
@@ -192,20 +191,32 @@ function StatusBar({ saveState, shared, syncStatus, onRefresh }) {
         ) : null}
       </span>
 
-      {shared ? (
-        <>
-          <span className={`tag ${syncStatus?.online === false ? '' : 'tag-plum'}`}>
-            <Icon name={syncStatus?.online === false ? 'offline' : syncStatus?.pending ? 'cloudUp' : 'users'} size="0.9em" />
-            {syncStatus?.online === false ? 'לא מקוון' : syncStatus?.pending ? 'ממתין לסנכרון' : 'משותף'}
-          </span>
-          <button type="button" className="btn btn-sm btn-quiet btn-icon"
-                  onClick={onRefresh} aria-label="רענן מהענן" title="רענן מהענן">
-            <Icon name="refresh" size="1em" className={syncStatus?.syncing ? 'spin' : ''} />
-          </button>
-        </>
-      ) : (
-        <span className="tag"><Icon name="lock" size="0.9em" />אישי</span>
-      )}
+      <CampBadge syncStatus={syncStatus} onRefresh={onRefresh} />
     </div>
+  );
+}
+
+/**
+ * One badge for the camp connection. There is no personal/shared mode any
+ * more — the camp code is the boundary — so this reports reachability only.
+ */
+function CampBadge({ syncStatus, onRefresh }) {
+  const offline = syncStatus?.online === false;
+  const waiting = syncStatus?.pending > 0;
+
+  const label = offline ? 'לא מקוון' : waiting ? 'ממתין לרשת' : 'מעודכן';
+  const icon = offline ? 'offline' : waiting ? 'cloudUp' : 'cloud';
+  const tone = offline || waiting ? '' : 'tag-ok';
+
+  return (
+    <>
+      <span className={`tag ${tone}`} title={syncStatus?.error || undefined}>
+        <Icon name={icon} size="0.9em" />{label}
+      </span>
+      <button type="button" className="btn btn-sm btn-quiet btn-icon"
+              onClick={onRefresh} aria-label="רענן עכשיו" title="רענן עכשיו">
+        <Icon name="refresh" size="1em" className={syncStatus?.syncing ? 'spin' : ''} />
+      </button>
+    </>
   );
 }

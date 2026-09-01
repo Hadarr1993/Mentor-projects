@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { hydrate, makeDefaults, deepMergeDefaults, SCHEMA_VERSION } from '../src/state/schema.js';
-import { mergeState, pruneTombstones } from '../src/state/sync.js';
+import { pruneTombstones } from '../src/state/sync.js';
 
 test('defaults carry 8 recipes and 8 sides', () => {
   const d = makeDefaults();
@@ -85,21 +85,7 @@ test('arrays are taken whole from stored data, not merged element-wise', () => {
   assert.deepEqual(merged.xs, [9]);
 });
 
-test('sync merge keeps the newest version of each entity, per entity', () => {
-  const mine   = { recipes: { a: { name: 'שלי חדש', _ts: 200 }, b: { name: 'שלי ישן', _ts: 50 } }, sides: {}, meals: {} };
-  const theirs = { recipes: { a: { name: 'שלהם ישן', _ts: 100 }, b: { name: 'שלהם חדש', _ts: 150 },
-                              c: { name: 'רק אצלם', _ts: 10 } }, sides: {}, meals: {} };
-  const out = mergeState(mine, theirs);
-  assert.equal(out.recipes.a.name, 'שלי חדש');    // mine is newer
-  assert.equal(out.recipes.b.name, 'שלהם חדש');   // theirs is newer
-  assert.equal(out.recipes.c.name, 'רק אצלם');    // theirs only — not lost
-});
 
-test('a delete tombstone is not resurrected by a stale peer', () => {
-  const mine   = { recipes: { a: { _deleted: true, _ts: 300 } }, sides: {}, meals: {} };
-  const theirs = { recipes: { a: { name: 'הוחזר לחיים', _ts: 100 } }, sides: {}, meals: {} };
-  assert.equal(mergeState(mine, theirs).recipes.a._deleted, true);
-});
 
 test('old tombstones are pruned, fresh ones are kept', () => {
   const old = Date.now() - 1000 * 60 * 60 * 24 * 90;
@@ -126,7 +112,7 @@ test('MIGRATION v1->v2: prices and ticks survive the reshape', async () => {
   };
   const out = hydrate(live);
 
-  assert.equal(out.schemaVersion, 2);
+  assert.equal(out.schemaVersion, SCHEMA_VERSION);
   assert.equal(out.shopping.items['אורז|גרם'].price, 25);
   assert.equal(out.shopping.items['אורז|גרם'].bought, true);
   assert.equal(out.shopping.items["בצל|יח'"].price, 8);
@@ -151,7 +137,7 @@ test('migrating twice is idempotent', async () => {
   const once = hydrate({ schemaVersion: 1, shopping: { prices: { 'a|גרם': 5 }, bought: { 'a|גרם': true }, _ts: 1 } });
   const twice = hydrate(once);
   assert.deepEqual(twice.shopping.items, once.shopping.items);
-  assert.equal(twice.schemaVersion, 2);
+  assert.equal(twice.schemaVersion, SCHEMA_VERSION);
 });
 
 test('a v2 document is left alone', async () => {
@@ -163,40 +149,7 @@ test('a v2 document is left alone', async () => {
   assert.equal(out.shopping.items['x|גרם']._ts, 77);
 });
 
-test('THE FIX: two people ticking different items both keep their work', async () => {
-  // The failure this replaces: shopping merged as one object, so whoever
-  // saved last replaced the other's entire tick list.
-  const mine = {
-    recipes: {}, sides: {}, meals: {},
-    shopping: { items: {
-      'אורז|גרם': { bought: true, _ts: 200 },
-      'בצל|גרם': { bought: false, _ts: 100 },
-    }, _ts: 200 },
-  };
-  const theirs = {
-    recipes: {}, sides: {}, meals: {},
-    shopping: { items: {
-      'אורז|גרם': { bought: false, _ts: 100 },
-      'בצל|גרם': { bought: true, _ts: 300 },
-      'מלח|גרם': { bought: true, price: 4, _ts: 150 },
-    }, _ts: 300 },
-  };
-  const out = mergeState(mine, theirs);
 
-  assert.equal(out.shopping.items['אורז|גרם'].bought, true, 'my newer tick survives');
-  assert.equal(out.shopping.items['בצל|גרם'].bought, true, 'their newer tick survives');
-  assert.equal(out.shopping.items['מלח|גרם'].price, 4, 'an item only they have is kept');
-});
-
-test('a price set by one person is not lost when the other ticks something', async () => {
-  const shopper = { recipes: {}, sides: {}, meals: {},
-    shopping: { items: { 'אורז|גרם': { bought: true, _ts: 500 } }, _ts: 500 } };
-  const pricer = { recipes: {}, sides: {}, meals: {},
-    shopping: { items: { 'בצל|גרם': { price: 12, _ts: 400 } }, _ts: 400 } };
-  const out = mergeState(shopper, pricer);
-  assert.equal(out.shopping.items['אורז|גרם'].bought, true);
-  assert.equal(out.shopping.items['בצל|גרם'].price, 12);
-});
 
 /* ── tasks ─────────────────────────────────────────────────────────── */
 
@@ -216,31 +169,4 @@ test('an existing document gains tasks without losing anything', async () => {
   assert.equal(after.shopping.items['אורז|גרם'].price, 11);
 });
 
-test('THE POINT: two people closing different tasks both keep their work', async () => {
-  const mine = {
-    recipes: {}, sides: {}, meals: {},
-    tasks: {
-      clean: { id: 'clean', text: 'לנקות', done: true, doneBy: 'תורן א', doneAt: 900, _ts: 900 },
-      water: { id: 'water', text: 'מים', done: false, _ts: 100 },
-    },
-  };
-  const theirs = {
-    recipes: {}, sides: {}, meals: {},
-    tasks: {
-      clean: { id: 'clean', text: 'לנקות', done: false, _ts: 100 },
-      water: { id: 'water', text: 'מים', done: true, doneBy: 'תורן ב', doneAt: 950, _ts: 950 },
-      unload: { id: 'unload', text: 'לפרוק', done: false, _ts: 200 },
-    },
-  };
-  const out = mergeState(mine, theirs);
 
-  assert.equal(out.tasks.clean.doneBy, 'תורן א', 'my close survives');
-  assert.equal(out.tasks.water.doneBy, 'תורן ב', 'their close survives');
-  assert.ok(out.tasks.unload, 'a task only they added is kept');
-});
-
-test('a deleted task is not resurrected by a stale device', async () => {
-  const mine = { recipes: {}, sides: {}, meals: {}, tasks: { x: { id: 'x', _deleted: true, _ts: 500 } } };
-  const theirs = { recipes: {}, sides: {}, meals: {}, tasks: { x: { id: 'x', text: 'חזרתי', _ts: 100 } } };
-  assert.equal(mergeState(mine, theirs).tasks.x._deleted, true);
-});

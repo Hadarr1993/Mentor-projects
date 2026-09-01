@@ -21,8 +21,22 @@ export const key = (code) => `kitchen:${code}`;
 
 /* --------------------------------------------------------------- rules */
 
-export async function readDoc(store, code) {
+/**
+ * Read the camp document.
+ *
+ * `since` is the revision the caller already holds. When it matches, we answer
+ * with a few bytes instead of the whole document — clients poll this on a
+ * timer, and shipping the full plan every few seconds would burn the Upstash
+ * command budget and the phone's data for no reason.
+ */
+export async function readDoc(store, code, since) {
   const doc = await store.get(key(code));
+  const rev = doc?.rev || 0;
+
+  const held = Number(since);
+  if (Number.isFinite(held) && held > 0 && held === rev) {
+    return { status: 200, body: { rev, unchanged: true } };
+  }
   return { status: 200, body: doc || { rev: 0, data: null } };
 }
 
@@ -100,7 +114,7 @@ export default async function handler(req, res, store = redisStore()) {
 
   try {
     if (req.method === 'GET') {
-      const { status, body } = await readDoc(store, code);
+      const { status, body } = await readDoc(store, code, req.query?.since);
       return res.status(status).json(body);
     }
     if (req.method === 'PUT') {

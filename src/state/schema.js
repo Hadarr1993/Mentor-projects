@@ -23,7 +23,7 @@ export const CORRUPT_KEY = 'midburn-kitchen__corrupt';
 export const DEVICE_KEY = 'midburn-kitchen__device';
 
 /** Bump when the shape changes, and add a matching entry to MIGRATIONS. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const now = () => Date.now();
 
@@ -54,7 +54,6 @@ export function makeDefaults() {
       days: 6,
       tornimPerMeal: 2,
       members: [],
-      shared: false,
       _ts: ts,
     },
     recipes: stamp(DEFAULT_RECIPES),
@@ -101,6 +100,15 @@ export const MIGRATIONS = {
       if (bought) put(key, { bought: true });
     }
     return { ...data, schemaVersion: 2, shopping: { items, _ts: ts } };
+  },
+
+  // 2 -> 3: the personal/shared toggle is gone. The camp code is the boundary
+  // now, and the server holds the document, so there is no second mode for a
+  // device to be in.
+  3: (data) => {
+    const settings = { ...(data.settings || {}) };
+    delete settings.shared;
+    return { ...data, schemaVersion: 3, settings };
   },
 };
 
@@ -153,6 +161,7 @@ export function hydrate(raw) {
   // them now that MIGRATIONS[2] has folded their contents into `items`.
   delete merged.shopping.prices;
   delete merged.shopping.bought;
+  delete merged.settings.shared;
   for (const [key, item] of Object.entries(merged.shopping.items || {})) {
     if (!item || typeof item !== 'object') { delete merged.shopping.items[key]; continue; }
     if (typeof item._ts !== 'number') item._ts = now();

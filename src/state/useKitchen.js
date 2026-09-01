@@ -69,14 +69,20 @@ export function useKitchen() {
 
       sync.setCampCode(next.campCode);
 
-      // A shared document merges the cloud copy in before first paint.
-      if (next.settings?.shared) {
-        try {
-          const theirs = await sync.pull();
-          if (theirs) next = hydrate(sync.mergeState(next, theirs));
-        } catch (err) {
-          if (!cancelled) setSyncStatus({ ...sync.status(), error: describe(err) });
+      // The camp document is authoritative. If the server has one, adopt it
+      // outright — joining is a read, never a negotiation between two copies.
+      // What this device holds locally is a cache of that same document.
+      try {
+        const theirs = await sync.fetchDoc();
+        if (theirs) {
+          next = hydrate(theirs);
+        } else if (next) {
+          // Nobody has published this camp yet, so this device seeds it.
+          sync.enqueue((doc) => doc || next);
         }
+      } catch (err) {
+        // No reception, or no backend configured. The cache carries the app.
+        if (!cancelled) setSyncStatus({ ...sync.status(), error: describe(err) });
       }
 
       if (cancelled) return;
@@ -99,17 +105,29 @@ export function useKitchen() {
 
   useEffect(() => sync.subscribe(setSyncStatus), []);
 
+  /**
+   * Live updates. The poll adopts anything a teammate pushed; local edits
+   * still in the queue are layered on top by sync.view(), so a change arriving
+   * mid-edit never discards what is being typed.
+   */
+  useEffect(() => sync.startPolling(() => {
+    const fresh = sync.view();
+    if (!fresh) return;
+    const hydrated = hydrate(fresh);
+    latest.current = hydrated;
+    setState(hydrated);
+    storage.set(STORAGE_KEY, JSON.stringify(hydrated), false).catch(() => {});
+  }), []);
+
   /* ------------------------------------------------------------- save */
 
   const write = useCallback(async (value) => {
     setSaveState('saving');
     try {
+      // The local record is the offline cache and is always written. Pushing
+      // to the camp is queued separately by `update`, so a network problem is
+      // a sync warning and never a lost edit.
       await storage.set(STORAGE_KEY, JSON.stringify(value), false);
-      if (value.settings?.shared) {
-        // Local write already succeeded; a cloud failure is a sync warning,
-        // not a lost edit, so it must not flip the save indicator to error.
-        storage.set(STORAGE_KEY, value, true).catch(() => {});
-      }
       setSaveError(null);
       setSaveState('saved');
       clearTimeout(savedTimer.current);
@@ -128,7 +146,15 @@ export function useKitchen() {
     timer.current = setTimeout(() => write(value), DEBOUNCE_MS);
   }, [write]);
 
-  /** Apply a change. `fn` receives the current state and returns the next. */
+  /**
+   * Apply a change.
+   *
+   * `fn` must be a pure transform of the document it is given — it is shown
+   * immediately, cached locally, and also queued for the camp, where it may be
+   * replayed against a newer document a teammate pushed in the meantime.
+   * Closing over a captured snapshot instead of using the passed value would
+   * make that replay overwrite their work.
+   */
   const update = useCallback((fn) => {
     setState((prev) => {
       if (!prev) return prev;
@@ -138,6 +164,7 @@ export function useKitchen() {
       schedule(next);
       return next;
     });
+    sync.enqueue(fn);
   }, [schedule]);
 
   /** Commit immediately and report whether the write actually landed. */
@@ -187,12 +214,13 @@ export function useKitchen() {
     memoryOnly,
     syncStatus,
     refreshFromCloud: async () => {
-      const theirs = await sync.pull();
+      const theirs = await sync.fetchDoc();
+      await sync.flush();
       if (!theirs) return false;
-      const merged = hydrate(sync.mergeState(latest.current, theirs));
-      latest.current = merged;
-      setState(merged);
-      await write(merged);
+      const fresh = hydrate(sync.view() || theirs);
+      latest.current = fresh;
+      setState(fresh);
+      await write(fresh);
       return true;
     },
   };
