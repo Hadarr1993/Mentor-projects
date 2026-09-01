@@ -108,6 +108,41 @@ if ((await editButtons()) !== before) {
   fail(`the list did not come back intact (${await editButtons()} of ${before} recipes)`);
 } else ok('closing returns the list exactly as it was');
 
+/* ── one motion per action ────────────────────────────────────────────── */
+
+console.log('\nswitching tabs runs one transition, not ten:');
+
+// The regression this catches: `.card { animation: fadeUp }` replayed on
+// every mount, so arriving at a tab put eight cards in vertical motion
+// underneath a panel already sliding in horizontally. Nothing threw; it
+// just looked like smear. Counted here rather than judged by eye.
+await page.getByRole('tab', { name: 'היום', exact: true }).click();
+await page.waitForTimeout(SETTLE);
+
+await page.getByRole('tab', { name: 'קניות', exact: true }).click();
+await page.waitForTimeout(90);
+
+const midFlight = await page.evaluate(() =>
+  document.getAnimations()
+    .filter((a) => a.playState === 'running')
+    .map((a) => a.animationName || 'transition'));
+
+const cardEntrances = midFlight.filter((n) => n === 'fadeUp').length;
+if (cardEntrances) {
+  fail(`${cardEntrances} card(s) replaying their entrance on a tab switch`);
+} else ok('the cards do not re-enter — the stagger is first paint only');
+
+if (midFlight.length > 2) {
+  fail(`${midFlight.length} animations running at once mid-switch: ${midFlight.join(', ')}`);
+} else ok(`${midFlight.length} animation(s) mid-switch`);
+
+// And it must actually be over quickly — this is a navigation, not a scene.
+await page.waitForTimeout(310);
+const stillGoing = await page.evaluate(() =>
+  document.getAnimations().filter((a) => a.playState === 'running').length);
+if (stillGoing) fail(`${stillGoing} animation(s) still running 400ms after the switch`);
+else ok('settled well inside 400ms');
+
 /* ── nothing is stranded mid-animation ────────────────────────────────── */
 
 console.log('\nno transition leaves an inline style behind:');

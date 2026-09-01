@@ -134,7 +134,7 @@ export function Tasks({ state, update, me }) {
             </h3>
             <span className="tag num">{progress.done}/{progress.count}</span>
           </div>
-          <div className="progress"><i style={{ width: `${progress.ratio * 100}%` }} /></div>
+          <div className="progress"><i style={{ '--rest': `${(1 - progress.ratio) * 100}%` }} /></div>
         </div>
       )}
 

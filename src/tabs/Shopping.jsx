@@ -92,7 +92,7 @@ export function Shopping({ state, update }) {
           <h2>רשימת קניות</h2>
           <span className="tag num">{totals.bought}/{totals.count}</span>
         </div>
-        <div className="progress"><i style={{ width: `${totals.progress * 100}%` }} /></div>
+        <div className="progress"><i style={{ '--rest': `${(1 - totals.progress) * 100}%` }} /></div>
 
         <div className="grid-2" style={{ marginTop: '0.5rem' }}>
           <div className="card-inset">

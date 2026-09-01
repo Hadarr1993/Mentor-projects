@@ -47,6 +47,12 @@
   --s5: 1.5rem;  --s6: 2rem;    --s7: 3rem;
 
   --tab-h: 3.5rem;
+
+  /* One curve for the whole app. The built-in `ease-out` is weak — it never
+     really commits — and a dozen ad-hoc cubic-beziers give every component a
+     slightly different personality. These two carry all of it. */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 * { box-sizing: border-box; }
@@ -114,7 +120,7 @@ p  { margin: 0 0 var(--s3); }
   border-radius: var(--r-lg);
   box-shadow: var(--shadow);
   padding: var(--s4);
-  animation: fadeUp 0.32s cubic-bezier(0.22, 0.61, 0.36, 1) backwards;
+  animation: fadeUp 0.32s var(--ease-out) backwards;
 }
 .card-flat { box-shadow: var(--shadow-sm); }
 .card-inset {
@@ -125,10 +131,14 @@ p  { margin: 0 0 var(--s3); }
   animation: none;
 }
 
+/* Once, when the app opens — see the `booted` flag in App.jsx. Replaying
+   this on every tab switch put eight cards in vertical motion underneath a
+   panel already moving horizontally, and the two read as smear. */
 @keyframes fadeUp {
   from { opacity: 0; transform: translate3d(0, 10px, 0); }
   to   { opacity: 1; transform: none; }
 }
+.app.booted .card { animation: none; }
 .card:nth-child(2) { animation-delay: 0.03s; }
 .card:nth-child(3) { animation-delay: 0.06s; }
 .card:nth-child(4) { animation-delay: 0.09s; }
@@ -162,27 +172,31 @@ button, input, select, textarea {
   letter-spacing: 0.004em;
   cursor: pointer;
   /* Fast enough that the press reads as instant, not as an animation. */
-  transition: transform 90ms ease-out, background-color 140ms ease-out,
-              box-shadow 140ms ease-out, opacity 140ms ease-out;
+  transition: transform 90ms var(--ease-out), background-color 140ms var(--ease-out),
+              box-shadow 140ms var(--ease-out), opacity 140ms var(--ease-out);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
-.btn:hover  { background: #EFDFCB; }
 .btn:active { transform: scale(0.965); }
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(224, 82, 27, 0.28); }
 .btn[disabled] { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--fire-btn-a) 0%, var(--fire-btn-b) 100%);
+  /* Light falls from above, so the lighter end of the ramp goes on top and
+     a one-pixel highlight sits on the very edge. The ramp's endpoints are
+     unchanged — 6.57:1 and 4.72:1 for white — and a hairline at the border
+     carries no text, so test/contrast.test.mjs still measures the same two
+     colours. Before this the button was correct and completely flat. */
+  background: linear-gradient(180deg, var(--fire-btn-b) 0%, var(--fire-btn-a) 100%);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(224, 82, 27, 0.32), 0 0 0 1px rgba(242, 166, 90, 0.35) inset;
-}
-.btn-primary:hover {
-  background: linear-gradient(135deg, #94320D 0%, #B33F14 100%);
+  box-shadow:
+    0 1px 2px rgba(93, 30, 8, 0.24),
+    0 4px 12px rgba(166, 56, 15, 0.28),
+    0 0 0 1px rgba(242, 166, 90, 0.35) inset,
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
 }
 
 .btn-quiet { background: transparent; color: var(--ink-2); }
-.btn-quiet:hover { background: rgba(107, 59, 110, 0.07); color: var(--ink); }
 
 /* A link inside a sentence, not a control on its own line. Stretching it to
    44px would tear a hole in the paragraph it lives in, so it stays inline —
@@ -194,14 +208,26 @@ button, input, select, textarea {
   text-decoration: underline; text-underline-offset: 2px;
   cursor: pointer;
 }
-.link:hover { color: var(--fire); }
 .link:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(224, 82, 27, 0.28); border-radius: 4px; }
 
 .btn-danger { background: var(--danger-bg); color: var(--danger); }
-.btn-danger:hover { background: #F9DAD6; }
 
 .btn-sm { padding: 0.4em 0.8em; font-size: 0.82rem; }
 .btn-icon { padding: 0.5em; border-radius: 50%; }
+
+/* ── Hover, only where a pointer exists ─────────────────────────────────
+   A phone fires :hover on tap and leaves the control stuck in that state
+   until something else is touched. This app is used on phones first, so
+   every hover rule lives behind the query and :active carries the press. */
+
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover         { background: #EFDFCB; }
+  .btn-primary:hover { background: linear-gradient(180deg, #B33F14 0%, #94320D 100%); }
+  .btn-quiet:hover   { background: rgba(107, 59, 110, 0.07); color: var(--ink); }
+  .btn-danger:hover  { background: #F9DAD6; }
+  .link:hover        { color: var(--fire); }
+  .dropzone:hover    { border-color: var(--gold); }
+}
 
 /* ── Touch targets ──────────────────────────────────────────────────────
    A control can look small and still be easy to hit. These rules grow the
@@ -224,7 +250,7 @@ button, input, select, textarea {
   background: var(--cream-2);
   border: 1.5px solid transparent;
   border-radius: var(--r-sm);
-  transition: border-color 140ms ease-out, box-shadow 140ms ease-out, background-color 140ms ease-out;
+  transition: border-color 140ms var(--ease-out), box-shadow 140ms var(--ease-out), background-color 140ms var(--ease-out);
 }
 .input:focus, .select:focus, .textarea:focus {
   outline: none;
@@ -256,7 +282,7 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   color: var(--ink-2);
   font-size: 0.84rem; font-weight: 550;
   cursor: pointer;
-  transition: transform 90ms ease-out, background-color 140ms, color 140ms, border-color 140ms;
+  transition: transform 90ms var(--ease-out), background-color 140ms, color 140ms, border-color 140ms;
   -webkit-tap-highlight-color: transparent;
 }
 .chip:active { transform: scale(0.95); }
@@ -312,7 +338,7 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   background: transparent; color: var(--ink-3);
   font-size: 0.72rem; font-weight: 600; letter-spacing: 0.012em;
   cursor: pointer; scroll-snap-align: center;
-  transition: color 160ms ease-out, background-color 160ms ease-out, transform 90ms ease-out;
+  transition: color 160ms var(--ease-out), background-color 160ms var(--ease-out), transform 90ms var(--ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 .tab:active { transform: scale(0.94); }
@@ -342,11 +368,13 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   background: var(--surface); color: var(--ink-2);
   box-shadow: var(--shadow-sm);
   cursor: pointer; user-select: none;
-  transition: background-color 160ms, color 160ms, box-shadow 160ms;
+  transition: background-color 160ms, color 160ms, box-shadow 160ms,
+              transform 90ms var(--ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 .daychip b { font-size: 0.95rem; font-weight: 650; letter-spacing: -0.01em; }
 .daychip span { font-size: 0.72rem; letter-spacing: 0.014em; }
+.daychip:active { transform: scale(0.96); }
 .daychip[aria-pressed="true"] {
   background: linear-gradient(135deg, var(--fire), var(--gold));
   color: #fff; box-shadow: 0 3px 12px rgba(224, 82, 27, 0.28);
@@ -397,7 +425,7 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   border-radius: var(--r);
   background: var(--danger-bg); color: var(--danger);
   box-shadow: var(--shadow-sm);
-  animation: fadeUp 0.28s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: fadeUp 0.28s var(--ease-out);
 }
 .banner-warn { background: rgba(242, 166, 90, 0.2); color: #8A4A12; }
 .banner .btn { background: rgba(255, 255, 255, 0.7); color: inherit; }
@@ -425,14 +453,30 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   color: #FFF6EA;
   font-size: 0.88rem; font-weight: 550;
   box-shadow: var(--shadow-lg);
-  animation: toastIn 0.34s cubic-bezier(0.22, 1.2, 0.36, 1);
   max-width: 100%;
+
+  /* A transition, not a keyframe animation. Toasts stack and replace each
+     other quickly, and a keyframe restarts from zero every time it is
+     interrupted; a transition retargets from wherever the element already
+     is. It also never starts from scale(0) — nothing appears out of
+     nothing, so the pill is already almost its own size before it lands. */
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition: opacity 260ms var(--ease-out), transform 260ms var(--ease-out);
+}
+.toast[data-state="entering"] {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0) scale(0.96);
+}
+/* Leaving is faster than arriving: the user decided, the system is just
+   getting out of the way. Still ease-out — ease-in would hold the pill on
+   screen through the exact moment the eye is watching it go. */
+.toast[data-state="leaving"] {
+  opacity: 0;
+  transform: translate3d(0, 8px, 0) scale(0.97);
+  transition-duration: 180ms;
 }
 .toast-danger { background: rgba(150, 30, 22, 0.95); }
-.toast.leaving { animation: toastOut 0.22s ease-in forwards; }
-
-@keyframes toastIn  { from { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.96); } }
-@keyframes toastOut { to   { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.97); } }
 
 /* ── Tables ─────────────────────────────────────────────────────────── */
 
@@ -471,10 +515,25 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   height: 0.5rem; border-radius: 999px;
   background: var(--cream-2); overflow: hidden;
 }
+/**
+ * The bar is always full width and always carries its whole gradient; what
+ * changes is how much of it is clipped away. Animating `width` re-stretched
+ * the gradient on every frame, so the colours slid around inside the bar as
+ * it grew. Clipping leaves them where they are and simply uncovers them.
+ *
+ * The layout is RTL, so the fill starts at the right and the clip eats in
+ * from the left.
+ */
 .progress > i {
-  display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--fire), var(--gold));
-  transition: width 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  display: block; width: 100%; height: 100%; border-radius: 999px;
+  /* The fill is anchored at the right and grows leftward, so the strong end
+     of the ramp belongs on the right. With the old `90deg` the first third
+     of progress showed nothing but the pale gold tail. */
+  background: linear-gradient(to left, var(--fire), var(--gold));
+  /* `round` keeps the leading edge of the fill capped, the way the old
+     width-driven bar was — a plain inset would cut it square. */
+  clip-path: inset(0 0 0 var(--rest, 100%) round 999px);
+  transition: clip-path 240ms var(--ease-out);
 }
 
 /* ── Checkbox ───────────────────────────────────────────────────────── */
@@ -543,7 +602,7 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
 .task-text {
   line-height: 1.4;
   overflow-wrap: anywhere;
-  transition: color 220ms ease-out;
+  transition: color 220ms var(--ease-out);
 }
 
 /* The line is drawn rather than toggled, so closing a task reads as an act
@@ -558,7 +617,7 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   border-radius: 2px;
   transform: scaleX(0);
   transform-origin: right center;
-  transition: transform 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 260ms var(--ease-out);
 }
 .task-text { position: relative; display: inline-block; max-width: 100%; }
 
@@ -581,7 +640,6 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   text-align: center; cursor: pointer;
   transition: border-color 160ms, background-color 160ms, transform 160ms;
 }
-.dropzone:hover { border-color: var(--gold); }
 .dropzone.over {
   border-color: var(--fire); background: rgba(242, 166, 90, 0.16);
   transform: scale(1.012);
@@ -600,7 +658,7 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
 .skeleton {
   background: linear-gradient(90deg, var(--cream-2) 25%, #F2E2CE 50%, var(--cream-2) 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
+  animation: shimmer 1.4s linear infinite;
   border-radius: var(--r-sm);
 }
 @keyframes shimmer { to { background-position: -200% 0; } }
@@ -613,12 +671,21 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.09ms !important;
     scroll-behavior: auto !important;
+    /* Not `transition-duration: 0`. Reduced motion asks for the movement to
+       go, not for the interface to stop answering: a button that changes
+       colour on press and a tick that fills in are comprehension, not
+       vestibular load. Restricting the property list drops transform,
+       clip-path and height while leaving those intact. */
+    transition-property: color, background-color, border-color, box-shadow, opacity !important;
+    transition-duration: 140ms !important;
   }
   .card { animation: fade 0.2s ease both; }
   @keyframes fade { from { opacity: 0; } }
-  .btn:active, .chip:active, .tab:active, .check:active .box { transform: none; }
+  .btn:active, .chip:active, .tab:active, .daychip:active,
+  .check:active .box { transform: none; }
+  /* The progress bar still has to show its value, just without travelling. */
+  .progress > i { transition: none; }
 }
 
 @media (prefers-reduced-transparency: reduce) {

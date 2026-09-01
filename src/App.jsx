@@ -34,6 +34,19 @@ export default function App() {
   const [tab, setTab] = useState('today');
 
   /**
+   * The staggered card entrance is worth seeing once, when the app opens.
+   * On every tab switch after that it fought the panel transition — eight
+   * cards rising vertically while the panel slid in horizontally, ten
+   * animations at once for a navigation performed dozens of times a day.
+   * The class turns the stagger off for the rest of the session.
+   */
+  const [booted, setBooted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBooted(true), 700);
+    return () => clearTimeout(t);
+  }, []);
+
+  /**
    * Which way the next panel should arrive from.
    *
    * The tab bar is RTL, so a higher index sits further left on screen and its
@@ -67,7 +80,7 @@ export default function App() {
 
   if (loading || !state) {
     return (
-      <div className="app">
+      <div className={`app ${booted ? 'booted' : ''}`}>
         <SunsetHeader title="המטבח של קאמפ פרדייז" subtitle="טוען…" />
         <div className="page stack">
           <div className="skeleton" style={{ height: '5rem' }} />
@@ -82,7 +95,7 @@ export default function App() {
   const Body = active.Component;
 
   return (
-    <div className="app">
+    <div className={`app ${booted ? 'booted' : ''}`}>
       <SunsetHeader title="המטבח של קאמפ פרדייז" subtitle={subtitle} />
 
       <StatusBar

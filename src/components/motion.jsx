@@ -63,7 +63,7 @@ export function TabPanel({ tabKey, direction, children }) {
     apply(0, false);
 
     springRef.current?.stop();
-    springRef.current = createSpring(0, SPRING.default, apply);
+    springRef.current = createSpring(0, SPRING.nav, apply);
     springRef.current.set(1);
 
     return () => springRef.current?.stop();
@@ -198,7 +198,7 @@ export function Reveal({ open, children }) {
     fullRef.current = inner.current?.offsetHeight || 0;
 
     if (!springRef.current) {
-      springRef.current = createSpring(0, SPRING.default, (v, settled) => {
+      springRef.current = createSpring(0, SPRING.panel, (v, settled) => {
         const node = outer.current;
         if (!node) return;
         const isOpen = openRef.current;

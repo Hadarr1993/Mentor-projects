@@ -21,6 +21,13 @@ export const SPRING = {
   move:    { damping: 1.0, response: 0.4 },
   momentum:{ damping: 0.8, response: 0.4 },
   sheet:   { damping: 0.8, response: 0.3 },
+  // Switching tabs happens tens of times a day. At response 0.35 the panel
+  // takes over half a second to settle, and a navigation you perform that
+  // often should never be something you wait out — the motion is there to
+  // say which way you went, and nothing more.
+  nav:     { damping: 1.0, response: 0.22 },
+  // Opening a section is dropdown-scale, not sheet-scale.
+  panel:   { damping: 1.0, response: 0.26 },
 };
 
 const prefersReducedMotion = () =>

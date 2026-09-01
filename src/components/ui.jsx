@@ -10,23 +10,47 @@ export const toast = (message, tone = 'ok') => pushToast(message, tone);
 export function ToastHost() {
   const [items, setItems] = useState([]);
   const idRef = useRef(0);
+  const timers = useRef(new Set());
 
   useEffect(() => {
+    const later = (fn, ms) => {
+      const t = setTimeout(() => { timers.current.delete(t); fn(); }, ms);
+      timers.current.add(t);
+    };
+
     pushToast = (message, tone) => {
       const id = ++idRef.current;
-      setItems((xs) => [...xs, { id, message, tone }]);
-      setTimeout(() => {
-        setItems((xs) => xs.map((x) => (x.id === id ? { ...x, leaving: true } : x)));
-        setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 220);
+      // Mounted in its "entering" position, then released on the next frame
+      // so the browser has a start value to transition away from. A single
+      // rAF is not always enough — the first one can land in the same frame
+      // as the paint that mounted the element.
+      setItems((xs) => [...xs, { id, message, tone, state: 'entering' }]);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setItems((xs) => xs.map((x) => (x.id === id ? { ...x, state: 'in' } : x)));
+      }));
+
+      later(() => {
+        setItems((xs) => xs.map((x) => (x.id === id ? { ...x, state: 'leaving' } : x)));
+        later(() => setItems((xs) => xs.filter((x) => x.id !== id)), 180);
       }, 2600);
     };
-    return () => { pushToast = () => {}; };
+
+    const pending = timers.current;
+    return () => {
+      pushToast = () => {};
+      for (const t of pending) clearTimeout(t);
+      pending.clear();
+    };
   }, []);
 
   return (
     <div className="toast-wrap" role="status" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`toast ${t.tone === 'danger' ? 'toast-danger' : ''} ${t.leaving ? 'leaving' : ''}`}>
+        <div
+          key={t.id}
+          className={`toast ${t.tone === 'danger' ? 'toast-danger' : ''}`}
+          data-state={t.state}
+        >
           <Icon name={t.tone === 'danger' ? 'error' : 'done'} />
           <span>{t.message}</span>
         </div>
