@@ -8,7 +8,7 @@
  */
 import { chromium } from 'playwright';
 import http from 'node:http';
-import { readDoc, writeDoc } from '../api/state.js';
+import { readDoc, writeDoc, key } from '../api/state.js';
 
 const PREVIEW = 'http://localhost:4173';
 const SCRATCH = '/tmp/claude-0/-home-user-Mentor-projects/d352fa57-50fb-5ebf-b111-4be071049ebf/scratchpad';
@@ -35,6 +35,28 @@ const server = http.createServer(async (req, res) => {
   return send(status, body);
 });
 await new Promise((r) => server.listen(4175, r));
+
+/**
+ * The camp document as the server holds it.
+ *
+ * Reading the UI only proves a device kept something for itself. Recipes were
+ * saved locally and never pushed for weeks and every screen still showed
+ * them, so the assertion that matters is what is actually in the store.
+ */
+const serverDoc = async (code) => {
+  const record = kv.get(key(code));          // { rev, updatedAt, data }
+  return record?.data ?? null;
+};
+
+/** Wait for the camp document to satisfy a predicate, or give up. */
+const waitForServer = async (code, predicate, tries = 25) => {
+  for (let i = 0; i < tries; i++) {
+    const doc = await serverDoc(code);
+    if (doc && predicate(doc)) return doc;
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  return null;
+};
 
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 let failed = false;
@@ -78,6 +100,37 @@ await A.page.getByRole('button', { name: /^הוסף$/ }).click();
 await A.page.waitForTimeout(1200);
 ok('added a task');
 
+/* ── the bug this suite missed: saves that never left the device ────── */
+
+console.log('\nwhat A saved is actually in the camp document:');
+
+// Every earlier assertion here went through `update()`. Recipes and sides go
+// through `saveNow()`, which wrote to IndexedDB and pushed nothing — so the
+// crew got a camp with no cooking in it and every screen looked correct.
+await tab(A.page, 'מתכונים');
+await A.page.waitForTimeout(600);
+await A.page.getByRole('button', { name: /ערוך/ }).first().click();
+await A.page.waitForTimeout(700);
+await A.page.locator('#r-name').fill('הקדרה של קאמפ פרדייז');
+await A.page.getByRole('button', { name: /שמור מתכון/ }).click();
+await A.page.waitForTimeout(1500);
+
+const withRecipe = await waitForServer(campCode, (d) =>
+  Object.values(d.recipes || {}).some((r) => r?.name === 'הקדרה של קאמפ פרדייז'));
+if (!withRecipe) fail('the recipe never reached the camp document — saveNow is not syncing');
+else ok('a saved recipe is in the camp document on the server');
+
+// Same path, different bag.
+await tab(A.page, 'הגדרות');
+await A.page.waitForTimeout(600);
+const sideCard = A.page.locator('.card', { hasText: 'מאגר תוספות' }).first();
+await sideCard.locator('button[aria-expanded]').first().click();
+await A.page.waitForTimeout(600);
+
+const settingsDoc = await serverDoc(campCode);
+if (!settingsDoc) fail('no camp document on the server at all');
+else ok('the camp document exists on the server');
+
 /* ── device B joins ─────────────────────────────────────────────────── */
 console.log('\ndevice B — joining:');
 const B = await device('B');
@@ -100,6 +153,12 @@ await B.page.waitForTimeout(400);
 if (!(await B.page.locator('main').innerText()).includes('לפרוק את הרכב')) {
   fail('B did not receive the task');
 } else ok('B sees A\'s task');
+
+await tab(B.page, 'מתכונים');
+await B.page.waitForTimeout(700);
+if (!(await B.page.locator('main').innerText()).includes('הקדרה של קאמפ פרדייז')) {
+  fail("B did not get A's recipe — this is the bug a teammate actually hit");
+} else ok("B sees A's recipe");
 
 /* ── the old bug: B joining must not have clobbered A ───────────────── */
 console.log('\nA is untouched by B joining:');

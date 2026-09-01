@@ -8,7 +8,7 @@ import { downloadFile } from '../lib/exportHtml.js';
 import { touch } from '../state/useKitchen.js';
 import * as sync from '../state/sync.js';
 
-export function Settings({ state, update, saveNow, setState, syncStatus, onRefreshCloud, me, chooseMe }) {
+export function Settings({ state, update, saveNow, adoptRemote, replaceCamp, syncStatus, onRefreshCloud, me, chooseMe }) {
   const copy = useCopy();
   const [error, setError] = useState(null);
 
@@ -22,11 +22,11 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
     toast('נוצר קוד מחנה חדש');
   };
 
+  /** Resets the camp for everyone holding the code, not just this phone. */
   const resetAll = async () => {
-    const fresh = makeDefaults();
-    setState(fresh);
-    await saveNow(() => fresh);
-    toast('הכל אופס לברירות המחדל');
+    const fresh = { ...makeDefaults(), campCode: state.campCode };
+    await replaceCamp(fresh);
+    toast('המחנה אופס לברירות המחדל — אצל כל הצוות');
   };
 
   return (
@@ -109,7 +109,7 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
           </div>
         </div>
 
-        <SwitchCamp state={state} setState={setState} saveNow={saveNow} setError={setError} />
+        <SwitchCamp state={state} adoptRemote={adoptRemote} setError={setError} />
 
         <div className="row wrap">
           <button type="button" className="btn btn-quiet btn-sm" onClick={onRefreshCloud}>
@@ -162,10 +162,14 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
         <h2>איפוס</h2>
         <p className="small muted">
           מוחק את כל המתכונים, השיבוצים והקניות ומחזיר לברירות המחדל.
-          כדאי להוריד גיבוי מלשונית הייצוא לפני.
+        </p>
+        <p className="small" style={{ color: 'var(--danger)', margin: 0 }}>
+          <b>זה מוחק אצל כל הצוות, לא רק במכשיר הזה.</b>{' '}
+          קוד המחנה נשאר אותו קוד, אז מי שמחובר יראה מחנה ריק.
+          הורד גיבוי מלשונית הייצוא לפני — זו הדרך חזרה.
         </p>
         <ConfirmButton onConfirm={resetAll} className="btn btn-danger"
-                       icon="reset">אפס הכל</ConfirmButton>
+                       icon="reset">אפס את המחנה</ConfirmButton>
       </div>
     </div>
   );
@@ -185,7 +189,7 @@ export function Settings({ state, update, saveNow, setState, syncStatus, onRefre
  * rather than clever: it costs one tap and removes any need to reason about
  * whether the local document mattered.
  */
-function SwitchCamp({ state, setState, saveNow, setError }) {
+function SwitchCamp({ state, adoptRemote, setError }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -206,8 +210,9 @@ function SwitchCamp({ state, setState, saveNow, setError }) {
         ? { ...hydrate(theirs), campCode: wanted }
         : { ...state, campCode: wanted };
 
-      setState(next);
-      await saveNow(() => next);
+      // A join is a read. `adoptRemote` caches the camp's document without
+      // pushing it back; only an empty camp gets seeded from this device.
+      await adoptRemote(next);
       if (!theirs) sync.enqueue((doc) => doc || next);
       setCode('');
       toast(theirs ? 'הצטרפת למחנה — הנתונים נטענו' : 'המחנה נוצר עם הנתונים שלך');

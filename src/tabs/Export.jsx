@@ -8,7 +8,7 @@ import { hydrate } from '../state/schema.js';
 
 const stamp = () => new Date().toISOString().slice(0, 10);
 
-export function Export({ state, saveNow, setState }) {
+export function Export({ state, replaceCamp }) {
   const [error, setError] = useState(null);
   const fileRef = useRef(null);
 
@@ -24,10 +24,11 @@ export function Export({ state, saveNow, setState }) {
       const parsed = JSON.parse(text);
       // Run it through the same hydration path as a normal load, so an old
       // backup gets migrated and validated instead of trusted as-is.
-      const restored = hydrate(parsed);
-      setState(restored);
-      const ok = await saveNow(() => restored);
-      toast(ok ? 'הגיבוי שוחזר' : 'שוחזר, אך השמירה נכשלה', ok ? 'ok' : 'danger');
+      // Keep the camp code this device is actually in, so a restore does not
+      // silently move the crew to whichever camp the backup was taken from.
+      const restored = { ...hydrate(parsed), campCode: state.campCode };
+      const ok = await replaceCamp(restored);
+      toast(ok ? 'הגיבוי שוחזר — אצל כל הצוות' : 'שוחזר, אך השמירה נכשלה', ok ? 'ok' : 'danger');
     } catch (err) {
       setError(`שחזור נכשל: ${err.message}`);
     }
@@ -120,7 +121,10 @@ export function Export({ state, saveNow, setState }) {
                    if (f) importBackup(f);
                  }} />
         </div>
-        <div className="tiny dim">שחזור מחליף את כל הנתונים הנוכחיים. כדאי להוריד גיבוי לפני.</div>
+        <div className="tiny dim">
+          שחזור מחליף את כל נתוני המחנה — <b>גם אצל שאר הצוות</b>, לא רק במכשיר הזה.
+          קוד המחנה נשאר אותו קוד. כדאי להוריד גיבוי לפני.
+        </div>
       </div>
 
       <ErrorBox error={error} onDismiss={() => setError(null)} />

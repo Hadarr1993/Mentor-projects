@@ -302,7 +302,8 @@ input.input-sm, select.input-sm { min-height: 2.75rem; }
 }
 .tag-fire { background: rgba(224, 82, 27, 0.12); color: var(--fire-deep); }
 .tag-plum { background: rgba(107, 59, 110, 0.12); color: var(--plum); }
-.tag-ok   { background: rgba(46, 107, 79, 0.12);  color: var(--ok); }
+.tag-ok     { background: rgba(46, 107, 79, 0.12);  color: var(--ok); }
+.tag-danger { background: var(--danger-bg);          color: var(--danger); }
 .tag-warn { background: rgba(224, 82, 27, 0.14);  color: var(--fire-deep); }
 
 /* ── Tab bar ────────────────────────────────────────────────────────────

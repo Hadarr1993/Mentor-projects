@@ -65,7 +65,7 @@ export default function App() {
   };
 
   const {
-    state, loading, update, saveNow, setState,
+    state, loading, update, saveNow, adoptRemote, replaceCamp,
     saveState, saveError, retrySave, corrupt, dismissCorrupt,
     memoryOnly, syncStatus, refreshFromCloud,
   } = kitchen;
@@ -166,7 +166,8 @@ export default function App() {
             state={state}
             update={update}
             saveNow={saveNow}
-            setState={setState}
+            adoptRemote={adoptRemote}
+            replaceCamp={replaceCamp}
             syncStatus={syncStatus}
             onRefreshCloud={refreshFromCloud}
             onGoToWeek={() => goTo('week')}
@@ -236,15 +237,26 @@ function StatusBar({ saveState, syncStatus, onRefresh }) {
  */
 function CampBadge({ syncStatus, onRefresh }) {
   const offline = syncStatus?.online === false;
-  const waiting = syncStatus?.pending > 0;
+  const failing = !offline && !!syncStatus?.error;
+  const waiting = !failing && syncStatus?.pending > 0;
 
-  const label = offline ? 'לא מקוון' : waiting ? 'ממתין לרשת' : 'מעודכן';
-  const icon = offline ? 'offline' : waiting ? 'cloudUp' : 'cloud';
-  const tone = offline || waiting ? '' : 'tag-ok';
+  /**
+   * "מעודכן" has to mean it. This badge used to report only online/offline
+   * and queue depth, so a sync failing on every attempt still read as up to
+   * date — and someone shared a camp code believing their crew could see
+   * their work. An error now takes the badge over and states itself on
+   * screen, not in a title attribute no phone will ever show.
+   */
+  const label = offline ? 'לא מקוון'
+    : failing ? 'הסנכרון נכשל'
+    : waiting ? 'ממתין לרשת'
+    : 'מעודכן';
+  const icon = offline ? 'offline' : failing ? 'warn' : waiting ? 'cloudUp' : 'cloud';
+  const tone = failing ? 'tag-danger' : offline || waiting ? '' : 'tag-ok';
 
   return (
     <>
-      <span className={`tag ${tone}`} title={syncStatus?.error || undefined}>
+      <span className={`tag ${tone}`}>
         <Icon name={icon} size="0.9em" />{label}
       </span>
       <button type="button" className="btn btn-sm btn-quiet btn-icon"

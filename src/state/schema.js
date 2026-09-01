@@ -22,6 +22,18 @@ export const CORRUPT_KEY = 'midburn-kitchen__corrupt';
  */
 export const DEVICE_KEY = 'midburn-kitchen__device';
 
+/**
+ * Marks that this device has already published the work it was holding from
+ * before `saveNow` synced. Local, never part of the document — a flag inside
+ * the document would sync, and the repair is per-device.
+ *
+ * It must run exactly once. Left running on every launch it becomes a device
+ * that continuously re-pushes whatever it holds, and once a tombstone ages
+ * past its TTL and is pruned from the camp, that device would put a deleted
+ * recipe back. Once is a migration; every time is a second writer.
+ */
+export const REPUBLISH_KEY = 'midburn-kitchen__republished';
+
 /** Bump when the shape changes, and add a matching entry to MIGRATIONS. */
 export const SCHEMA_VERSION = 3;
 
